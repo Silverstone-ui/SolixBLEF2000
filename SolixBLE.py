@@ -218,12 +218,13 @@ class SolixBLEDevice:
                 self._shared_key = None
 
                 # Make new client and connect
-                self._client = BleakClient(
-                    self._ble_device,
+                self._client = await establish_connection(
+                    BleakClient,
+                    device=self._ble_device,
+                    name=self.address,
+                    max_attempts=max_attempts,
                     disconnected_callback=self._disconnect_callback,
-                    timeout=10,
                 )
-                await self._client.connect()
                 await asyncio.sleep(3)
 
             except BleakError:

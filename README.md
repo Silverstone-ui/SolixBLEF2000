@@ -72,7 +72,7 @@ same directory as your program. If you are using manual installation make sure
 the dependencies are installed as well.
 
 ```
-pip install bleak cryptography pycryptodome
+pip install bleak bleak-retry-connector cryptography pycryptodome
 ```
 
 ## Adding support for new devices
