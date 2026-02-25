@@ -33,7 +33,7 @@ jobs:
         pip install -r requirements_dev.txt
     - name: Test with pytest and coverage
       run: |
-        pytest --cov=custom_components
+        pytest --cov
     - name: Test with pytest
       run: |
         pytest
