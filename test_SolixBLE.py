@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from bleak import BLEDevice
 
-from SolixBLE import C1000, PortStatus, SolixBLEDevice
+from SolixBLE import C300, C1000, LightStatus, PortStatus, SolixBLEDevice
 
 MOCK_DEVICE_NAME = "Mock Device"
 MOCK_DEVICE_ADDRESS = "AA:BB:CC:DD:EE:FF"
@@ -72,6 +72,38 @@ MOCK_BLE_DEVICE = BLEDevice(MOCK_DEVICE_ADDRESS, MOCK_DEVICE_NAME, {})
                 "serial_number": "APC9FE0E27300275",
             },
             id="c1000_ac_load",
+        ),
+        pytest.param(
+            C300,
+            "a10131a2050300000000a3050300000000a40302ffffa503020000a603025400a703020000a803020000a903020000aa03020100ab03020000ac03020000ad03020000ae03025500af03020000b003020100b103021b04b20302fc01b30302fc01b403021c00b503027b00b603021b04b7020101b8020100b9020124ba020100bb020164bc020164bd020100be020100bf020100c0020101c1020100c2020100c3020100c4020100c51100415a5653424a30453339323030303438c603024a01c70302a005c803022c01c903023c00ca03020000cb020101cc020100cd020102ce020132cf020100d0020100d1020101",
+            {
+                "ac_timer_remaining": 0,
+                "ac_timer": None,
+                "dc_timer_remaining": 0,
+                "dc_timer": None,
+                "hours_remaining": 25.5,
+                "days_remaining": 255,
+                "ac_power_in": 0,
+                "ac_power_out": 84,
+                "usb_c1_power": 0,
+                "usb_c2_power": 0,
+                "usb_c3_power": 0,
+                "usb_a1_power": 1,
+                "dc_power_out": 0,
+                "solar_power_in": 0,
+                "power_in": 0,
+                "power_out": 85,
+                "solar_port": PortStatus.NOT_CONNECTED,
+                "battery_percentage": 100,
+                "usb_port_c1": PortStatus.NOT_CONNECTED,
+                "usb_port_c2": PortStatus.NOT_CONNECTED,
+                "usb_port_c3": PortStatus.NOT_CONNECTED,
+                "usb_port_a1": PortStatus.OUTPUT,
+                "dc_port": PortStatus.NOT_CONNECTED,
+                "light": LightStatus.OFF,
+                "serial_number": "AZVSBJ0E39200048",
+            },
+            id="c300_ac_load",
         ),
     ],
 )
