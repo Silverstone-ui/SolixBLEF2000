@@ -17,6 +17,13 @@ from ..states import PortStatus
 
 
 class C1000(SolixBLEDevice):
+    """
+    C1000(X) Power Station.
+
+    Use this class to connect and monitor a C1000(X) power station.
+    This model is also known as the A1761.
+
+    """
 
     _EXPECTED_TELEMETRY_LENGTH: int = 253
 

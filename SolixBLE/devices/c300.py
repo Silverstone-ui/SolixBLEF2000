@@ -17,6 +17,13 @@ from ..states import ChargingStatus, LightStatus, PortStatus
 
 
 class C300(SolixBLEDevice):
+    """
+    C300(X) Power Station.
+
+    Use this class to connect and monitor a C300(X) power station.
+    This model is also known as the A1722.
+
+    """
 
     _EXPECTED_TELEMETRY_LENGTH: int = 253
 
