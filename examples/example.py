@@ -6,8 +6,8 @@
 
 import asyncio
 import logging
-import SolixBLE
 
+from SolixBLE import C300, discover_devices
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG)
 async def main():
 
     # Find device
-    devices = await SolixBLE.discover_devices()
+    devices = await discover_devices()
 
     selected_device = None
     for device in devices:
@@ -28,8 +28,8 @@ async def main():
         return
 
     # Initialize the device
-    device = SolixBLE.C300(selected_device)
-    # device = SolixBLE.C1000(selected_device)
+    device = C300(selected_device)
+    # device = C1000(selected_device)
 
     # Connect
     connected = await device.connect()
@@ -38,7 +38,7 @@ async def main():
         raise Exception
 
     # Do nothing, the library will print status updates in debug mode
-    await asyncio.sleep(300)
+    await asyncio.sleep(900)
 
 
 if __name__ == "__main__":
