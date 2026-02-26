@@ -27,9 +27,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11"
 ]
 
-[tool.setuptools]
-py-modules = ['SolixBLE']
-
 [project.urls]
 Homepage = "https://github.com/flip-dots/SolixBLE"
 Documentation = "https://solixble.readthedocs.io/en/latest/"
