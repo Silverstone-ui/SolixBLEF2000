@@ -774,37 +774,37 @@ class C300(SolixBLEDevice):
 
         :returns: Hours remaining or default float value.
         """
-        return (
-            self._parse_int("a4", begin=1, end=2) / 10.0
-            if self._data is not None
-            else DEFAULT_METADATA_FLOAT
-        )
+        if self._data is None:
+            return DEFAULT_METADATA_FLOAT
 
-    # TODO Validate that it is actually days remaining!
+        return round(divmod(self.time_remaining, 24)[1], 1)
+
     @property
     def days_remaining(self) -> int:
         """Time remaining to full/empty.
 
+        Note that any partial days are overflowed into
+        the hours remaining. Use time_remaining if you want
+        hours to be included.
+
         :returns: Days remaining or default int value.
         """
-        return self._parse_int("a4", begin=2, end=3)
+        if self._data is None:
+            return DEFAULT_METADATA_INT
+
+        return round(divmod(self.time_remaining, 24)[0])
 
     @property
     def time_remaining(self) -> float:
-        """Time remaining to full/empty.
-
-        This includes any hours which were overflowed
-        into days.
+        """Time remaining to full/empty in hours.
 
         :returns: Hours remaining or default float value.
         """
-        if (
-            self.hours_remaining == DEFAULT_METADATA_FLOAT
-            or self.days_remaining == DEFAULT_METADATA_INT
-        ):
-            return DEFAULT_METADATA_FLOAT
-
-        return (self.days_remaining * 24) + self.hours_remaining
+        return (
+            self._parse_int("a4", begin=1) / 10.0
+            if self._data is not None
+            else DEFAULT_METADATA_FLOAT
+        )
 
     @property
     def timestamp_remaining(self) -> datetime | None:
@@ -812,7 +812,7 @@ class C300(SolixBLEDevice):
 
         :returns: Timestamp of when will be full/empty or None.
         """
-        if self.time_remaining == DEFAULT_METADATA_FLOAT:
+        if self._data is None:
             return None
         return datetime.now() + timedelta(hours=self.time_remaining)
 
@@ -1003,37 +1003,37 @@ class C1000(SolixBLEDevice):
 
         :returns: Hours remaining or default float value.
         """
-        return (
-            self._parse_int("a4", begin=1, end=2) / 10.0
-            if self._data is not None
-            else DEFAULT_METADATA_FLOAT
-        )
+        if self._data is None:
+            return DEFAULT_METADATA_FLOAT
 
-    # TODO Validate that it is actually days remaining!
+        return round(divmod(self.time_remaining, 24)[1], 1)
+
     @property
     def days_remaining(self) -> int:
         """Time remaining to full/empty.
 
+        Note that any partial days are overflowed into
+        the hours remaining. Use time_remaining if you want
+        hours to be included.
+
         :returns: Days remaining or default int value.
         """
-        return self._parse_int("a4", begin=2, end=3)
+        if self._data is None:
+            return DEFAULT_METADATA_INT
+
+        return round(divmod(self.time_remaining, 24)[0])
 
     @property
     def time_remaining(self) -> float:
-        """Time remaining to full/empty.
-
-        This includes any hours which were overflowed
-        into days.
+        """Time remaining to full/empty in hours.
 
         :returns: Hours remaining or default float value.
         """
-        if (
-            self.hours_remaining == DEFAULT_METADATA_FLOAT
-            or self.days_remaining == DEFAULT_METADATA_INT
-        ):
-            return DEFAULT_METADATA_FLOAT
-
-        return (self.days_remaining * 24) + self.hours_remaining
+        return (
+            self._parse_int("a4", begin=1) / 10.0
+            if self._data is not None
+            else DEFAULT_METADATA_FLOAT
+        )
 
     @property
     def timestamp_remaining(self) -> datetime | None:
@@ -1041,7 +1041,7 @@ class C1000(SolixBLEDevice):
 
         :returns: Timestamp of when will be full/empty or None.
         """
-        if self.time_remaining == DEFAULT_METADATA_FLOAT:
+        if self._data is None:
             return None
         return datetime.now() + timedelta(hours=self.time_remaining)
 
