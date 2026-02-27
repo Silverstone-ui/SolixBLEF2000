@@ -18,6 +18,7 @@ the list of properties for that class.
    c1000g2
    f2000
    f3800
+   solarbank2
    generic
    enums
    helpers

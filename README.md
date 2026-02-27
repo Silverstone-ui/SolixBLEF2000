@@ -44,6 +44,7 @@ No pairing is required in order to receive telemetry data.
 - C1000 Gen 2
 - F2000 (767 PowerHouse)
 - F3800
+- Solarbank 2
 - Maybe more? IDK
 
 

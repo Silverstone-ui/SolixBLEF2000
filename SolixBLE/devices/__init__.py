@@ -11,5 +11,15 @@ from .c1000g2 import C1000G2
 from .f2000 import F2000
 from .f3800 import F3800
 from .generic import Generic
+from .solarbank2 import Solarbank2
 
-__all__ = ["C300", "C300DC", "C1000", "C1000G2", "F2000", "F3800", "Generic"]
+__all__ = [
+    "C300",
+    "C300DC",
+    "C1000",
+    "C1000G2",
+    "F2000",
+    "F3800",
+    "Solarbank2",
+    "Generic",
+]

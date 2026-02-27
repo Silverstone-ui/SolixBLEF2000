@@ -5,7 +5,7 @@
 """
 
 from .device import SolixBLEDevice
-from .devices import C300, C300DC, C1000, C1000G2, F2000, F3800, Generic
+from .devices import C300, C300DC, C1000, C1000G2, F2000, F3800, Generic, Solarbank2
 from .states import (
     ChargingStatus,
     ChargingStatusC300DC,
@@ -23,6 +23,7 @@ __all__ = [
     "C1000G2",
     "F2000",
     "F3800",
+    "Solarbank2",
     "Generic",
     "ChargingStatus",
     "ChargingStatusC300DC",

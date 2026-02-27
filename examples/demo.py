@@ -21,6 +21,7 @@ from SolixBLE import (
     F2000,
     F3800,
     Generic,
+    Solarbank2,
     SolixBLEDevice,
     discover_devices,
 )
@@ -32,6 +33,7 @@ MODELS = {
     "C1000 G2": C1000G2,
     "F2000 (767 PowerHouse)": F2000,
     "F3800": F3800,
+    "Solarbank 2": Solarbank2,
     "Unknown": Generic,
 }
 
