@@ -375,10 +375,10 @@ class SolixBLEDevice:
                 _LOGGER.debug(f"Changes detected compared to previous status update!")
                 differences = {
                     k: {
-                        "bytes": f"{self._data[k]} -> {parsed_data[k]}",
-                        "hex": f"{self._data[k].hex()} -> {parsed_data[k].hex()}",
-                        "uint": f"{int.from_bytes(self._data[k][1:], byteorder="little")} -> {int.from_bytes(parsed_data[k][1:], byteorder="little")}",
-                        "int": f"{int.from_bytes(self._data[k][1:], byteorder="little", signed=True)} -> {int.from_bytes(parsed_data[k][1:], byteorder="little", signed=True)}",
+                        "bytes": f"""{self._data[k]} -> {parsed_data[k]}""",
+                        "hex": f"""{self._data[k].hex()} -> {parsed_data[k].hex()}""",
+                        "uint": f"""{int.from_bytes(self._data[k][1:], byteorder="little")} -> {int.from_bytes(parsed_data[k][1:], byteorder="little")}""",
+                        "int": f"""{int.from_bytes(self._data[k][1:], byteorder="little", signed=True)} -> {int.from_bytes(parsed_data[k][1:], byteorder="little", signed=True)}""",
                     }
                     for k in self._data.keys() & parsed_data.keys()
                     if self._data[k] != parsed_data[k]
@@ -429,10 +429,10 @@ class SolixBLEDevice:
         if _LOGGER.isEnabledFor(logging.DEBUG):
             pretty_data = {
                 key: {
-                    "bytes": f"{value}",
-                    "hex": f"{value.hex()}",
-                    "uint": f"{int.from_bytes(value[1:], byteorder="little")}",
-                    "int": f"{int.from_bytes(value[1:], byteorder="little", signed=True)}",
+                    "bytes": f"""{value}""",
+                    "hex": f"""{value.hex()}""",
+                    "uint": f"""{int.from_bytes(value[1:], byteorder="little")}""",
+                    "int": f"""{int.from_bytes(value[1:], byteorder="little", signed=True)}""",
                 }
                 for key, value in self._data.items()
             }
