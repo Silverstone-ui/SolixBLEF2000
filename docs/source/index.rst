@@ -35,19 +35,19 @@ Power station support
 ======================= ======== ========== ========= ========= ============ ====== 
 Parameter               C300(X)  C300(X) DC C1000(X)  C1000 G2  F2000 (767)  F3800  
 ======================= ======== ========== ========= ========= ============ ====== 
-AC Timer.               ✅        ❌          ✅        ❌         ❌           ❌     
-DC Timer.               ✅        ❌          ❌        ❌         ❌           ❌     
-Time remaining.         ✅        ✅          ✅        ❌         ✅           ✅     
-AC Power in.            ✅        N/A         ✅        ✅         ✅           ✅     
-AC Power out.           ✅        N/A         ✅        ✅         ✅           ✅     
-USB Power out.          ✅        ✅          ✅        ✅         ✅           ✅     
-DC Power Out.           ✅        ✅          ❌        ✅         ✅           ✅     
-DC Power In.            ✅        ✅          ✅        ✅         ✅           ✅     
-DC Power In status.     ✅        ✅          ✅        ✅         ❌           ❌     
-Total Power In.         ✅        ✅          ✅        ❌         ❌           ✅     
-Total Power Out.        ✅        ✅          ✅        ✅         ❌           ✅     
+AC Timer                ✅        N/A         ✅        ❌         ❌           ❌     
+DC Timer                ✅        ❌          ❌        ❌         ❌           ❌     
+Time remaining          ✅        ✅          ✅        ❌         ✅           ✅     
+AC Power in             ✅        N/A         ✅        ✅         ✅           ✅     
+AC Power out            ✅        N/A         ✅        ✅         ✅           ✅     
+USB Power out           ✅        ✅          ✅        ✅         ✅           ✅     
+DC Power Out            ✅        ✅          ❌        ✅         ✅           ✅     
+DC Power In             ✅        ✅          ✅        ✅         ✅           ✅     
+DC Power In status      ✅        ✅          ✅        ✅         ❌           ❌     
+Total Power In          ✅        ✅          ✅        ❌         ❌           ✅     
+Total Power Out         ✅        ✅          ✅        ✅         ❌           ✅     
 Firmware version        ✅        ❌          ✅        ❌         ✅           ✅     
-Expansion firmware      N/A       N/A         ✅        N/A        ✅          ✅     
+Expansion firmware      N/A       N/A         ✅        N/A       ✅           ✅     
 AC on/off state         ✅        N/A         ✅        ✅         ❌           ✅     
 Temperature             ✅        ✅          ✅        ✅         ✅           ✅     
 Expansion temperature   N/A       N/A         ✅        N/A       ✅           ❌     
