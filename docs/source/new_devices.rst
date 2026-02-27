@@ -35,7 +35,7 @@ aim to flip every state at least once (e.g AC charging, AC discharging, DC charg
 
 
 Example telemetry data
-----------------
+----------------------
 
 These are example snippets of the telemetry debug log of a C300X. "c5" contains the serial number
 and "a6" is the AC power out, going from 87w to 93w, and "ae" is the total power out, going from

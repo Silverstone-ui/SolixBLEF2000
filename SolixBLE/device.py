@@ -341,10 +341,15 @@ class SolixBLEDevice:
         parsed_data: dict[str, bytes] = {}
         remaining_data = bytearray(data)
         while len(remaining_data) != 0:
-            param_id = bytes([remaining_data.pop(0)]).hex()
-            param_len = remaining_data.pop(0)
-            param_data = bytes([remaining_data.pop(0) for _ in range(0, param_len)])
-            parsed_data[param_id] = param_data
+            try:
+                param_id = bytes([remaining_data.pop(0)]).hex()
+                param_len = remaining_data.pop(0)
+                param_data = bytes([remaining_data.pop(0) for _ in range(0, param_len)])
+                parsed_data[param_id] = param_data
+            except IndexError:
+                _LOGGER.exception(
+                    "Unexpected end of packet! Data may be missing or invalid!"
+                )
 
         return parsed_data
 

@@ -13,9 +13,33 @@ import sys
 from aioconsole import ainput
 from bleak import BLEDevice
 
-from SolixBLE import C300, C1000, Generic, SolixBLEDevice, discover_devices
+from SolixBLE import (
+    C300,
+    C300DC,
+    C1000,
+    C1000G2,
+    F2000,
+    F3800,
+    Generic,
+    PrimeCharger250w,
+    Solarbank2,
+    Solarbank3,
+    SolixBLEDevice,
+    discover_devices,
+)
 
-MODELS = {"C300": C300, "C1000": C1000, "Unknown": Generic}
+MODELS = {
+    "C300": C300,
+    "C300DC": C300DC,
+    "C1000": C1000,
+    "C1000 G2": C1000G2,
+    "F2000 (767 PowerHouse)": F2000,
+    "F3800": F3800,
+    "Solarbank 2": Solarbank2,
+    "Solarbank 3": Solarbank3,
+    "PrimeCharger250w": PrimeCharger250w,
+    "Unknown": Generic,
+}
 
 
 async def prompt_debug_mode():

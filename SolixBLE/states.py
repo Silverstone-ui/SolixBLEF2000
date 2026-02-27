@@ -39,6 +39,44 @@ class ChargingStatus(Enum):
     CHARGING = 2
 
 
+class ChargingStatusC300DC(Enum):
+    """The charging type of a C300 DC."""
+
+    #: The status is unknown.
+    UNKNOWN = -1
+
+    #: The device is idle.
+    INACTIVE = 0
+
+    #: The device is charging via solar.
+    SOLAR = 1
+
+    #: The device is charging via DC.
+    DC = 2
+
+    #: The device is charging via solar and DC.
+    BOTH = 3
+
+
+class ChargingStatusF3800(Enum):
+    """The charging type of an F3800."""
+
+    #: The status is unknown.
+    UNKNOWN = -1
+
+    #: The device is idle.
+    INACTIVE = 0
+
+    #: The device is charging via solar.
+    SOLAR = 1
+
+    #: The device is charging via AC.
+    AC = 2
+
+    #: The device is charging via solar and AC.
+    BOTH = 3
+
+
 class LightStatus(Enum):
     """The status of the light on the device."""
 
