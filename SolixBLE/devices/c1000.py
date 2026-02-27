@@ -289,3 +289,11 @@ class C1000(SolixBLEDevice):
         :returns: Device serial number or default str value.
         """
         return self._parse_string("d0", begin=1)
+
+    async def turn_ac_on(self) -> None:
+        """Turn the AC output on."""
+        await self._send_command(bytes.fromhex("404a"), bytes.fromhex("a10121a2020101"))
+
+    async def turn_ac_off(self) -> None:
+        """Turn the AC output off."""
+        await self._send_command(bytes.fromhex("404a"), bytes.fromhex("a10121a2020100"))

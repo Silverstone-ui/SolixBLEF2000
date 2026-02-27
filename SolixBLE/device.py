@@ -8,6 +8,7 @@ import asyncio
 import inspect
 import json
 import logging
+import time
 from collections.abc import Callable
 from datetime import datetime
 
@@ -16,9 +17,11 @@ from bleak.backends.client import BaseBleakClient
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
 from Crypto.Cipher import AES
+from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from .const import (
+    BASE_TIMESTAMP,
     DEFAULT_METADATA_INT,
     DEFAULT_METADATA_STRING,
     DISCONNECT_TIMEOUT,
@@ -62,6 +65,7 @@ class SolixBLEDevice:
         self._number_of_received_packets: int = 0
         self._shared_key: bytes | None = None
         self._iv: bytes | None = None
+        self._negotiation_timestamp: float | None = None
 
     def add_callback(self, function: Callable[[], None]) -> None:
         """Register a callback to be run on state updates.
@@ -114,6 +118,7 @@ class SolixBLEDevice:
                 self._number_of_received_packets = 0
                 self._shared_key = None
                 self._iv = None
+                self._negotiation_timestamp = None
 
                 # Make new client and connect
                 self._client = await establish_connection(
@@ -198,6 +203,7 @@ class SolixBLEDevice:
         self._number_of_received_packets = 0
         self._shared_key = None
         self._iv = None
+        self._negotiation_timestamp = None
 
         # If there is a client disconnect and throw it away
         if self._client:
@@ -223,6 +229,7 @@ class SolixBLEDevice:
             and self.supports_telemetry
             and self._shared_key is not None
             and self._iv is not None
+            and self._negotiation_timestamp is not None
             and self._data is not None
         )
 
@@ -455,6 +462,7 @@ class SolixBLEDevice:
             )
         elif self._number_of_received_packets == 3:
             _LOGGER.debug("Sending negotiation response 3...")
+            self._negotiation_timestamp = time.time()
             await self._client.write_gatt_char(
                 UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_3)
             )
@@ -507,6 +515,63 @@ class SolixBLEDevice:
         encrypted_payload = data[10:-3]
         cipher = AES.new(self._shared_key, AES.MODE_CBC, iv=self._iv)
         return cipher.decrypt(encrypted_payload)
+
+    def _checksum(self, packet: bytes) -> bytes:
+        """Calculate the checksum byte for a packet."""
+        checksum_value = 0
+        for b in packet:
+            checksum_value = checksum_value ^ b
+        return checksum_value.to_bytes(1)
+
+    async def _send_command(self, command_type: bytes, payload_bytes: bytes) -> None:
+        """Send a command to the device."""
+
+        # Commands include a timestamp in the payload to prevent replay attacks
+        # and that timestamp is set during negotiations
+        time_passed = int(time.time() - self._negotiation_timestamp)
+        base_timestamp = int.from_bytes(
+            bytes.fromhex(BASE_TIMESTAMP), byteorder="little"
+        )
+        new_timestamp = (base_timestamp + time_passed).to_bytes(
+            length=4, byteorder="little"
+        )
+        new_payload = payload_bytes + bytes.fromhex("fe0503") + new_timestamp
+        await self._send_encrypted_packet(command_type, new_payload)
+
+    async def _send_encrypted_packet(
+        self, message_type: bytes, payload_bytes: bytes
+    ) -> None:
+        """Send an encrypted packet using negotiated shared secret and IV."""
+        _LOGGER.debug(
+            f"Building packet with type: {message_type.hex()} and payload: {payload_bytes.hex()}"
+        )
+
+        # Pad payload
+        padder = padding.PKCS7(128).padder()
+        padded_data = padder.update(payload_bytes)
+        padded_data += padder.finalize()
+
+        # Encrypt payload
+        cipher = AES.new(self._shared_key, AES.MODE_CBC, iv=self._iv)
+        encrypted_payload = cipher.encrypt(padded_data)
+
+        # Calculate length of message
+        length = 2 + 2 + 3 + 2 + len(encrypted_payload) + 1
+        length_bytes = length.to_bytes(length=2, byteorder="little")
+
+        # Build packet
+        packet = (
+            bytes.fromhex("ff09")
+            + length_bytes
+            + bytes.fromhex("03000f")
+            + message_type
+            + encrypted_payload
+        )
+        packet = packet + self._checksum(packet)
+        _LOGGER.debug(f"Sending encrypted packet: {packet.hex()}")
+
+        # Send packet
+        await self._client.write_gatt_char(UUID_COMMAND, packet)
 
     def _run_state_changed_callbacks(self) -> None:
         """Execute all registered callbacks for a state change."""

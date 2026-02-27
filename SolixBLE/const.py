@@ -56,6 +56,12 @@ NEGOTIATION_COMMAND_4 = "ff094c000300010021a140060ea168f232aedb37fb2d120c4918032
 #: Response to receiving 5th negotiation message
 NEGOTIATION_COMMAND_5 = "ff095a000300014022580bc0532a53c739adf3da7b994a7b5f221bcc16bab6392c215cb4faaf41d9d58e2c81c016e474c78eed5569147cb74a1f22ca2b3fad2e209dbbcfbdaca352034a6c479f055f68581b5f1e22348809f526"
 
+#: The unix timestamp that is agreed upon in the negotiations. This is used
+#: by Anker to protect against replay attacks as commands must contain the
+#: current encrypted time.
+BASE_TIMESTAMP = "42ad8c69"
+
+
 #: The private key this program uses to perform the ECDH negotiation to
 #: get a shared secret which is then used as an AES key for encrypting
 #: communications between the program and the power station. Yes I know it
