@@ -492,7 +492,7 @@ class SolixBLEDevice:
                     case _:
                         _LOGGER.debug(f"Received unknown message of type: {cmd.hex()}")
                         try:
-                            decrypted_payload = self._decrypt_payload(new_payload)
+                            decrypted_payload = self._decrypt_payload(payload)
                             _LOGGER.debug(
                                 f"Decrypted payload: {decrypted_payload.hex()}"
                             )
