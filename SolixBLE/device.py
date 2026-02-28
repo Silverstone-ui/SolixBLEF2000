@@ -492,6 +492,12 @@ class SolixBLEDevice:
                     case _:
                         _LOGGER.debug(f"Received unknown message of type: {cmd.hex()}")
                         try:
+
+                            # If the payload is one byte too short try putting the
+                            # last byte of the cmd in front of it
+                            if len(payload) % 16 == 15:
+                                payload = cmd[1].to_bytes() + payload
+
                             decrypted_payload = self._decrypt_payload(payload)
                             _LOGGER.debug(
                                 f"Decrypted payload: {decrypted_payload.hex()}"
