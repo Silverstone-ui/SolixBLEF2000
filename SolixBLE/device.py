@@ -524,7 +524,14 @@ class SolixBLEDevice:
         return checksum_value.to_bytes(1)
 
     async def _send_command(self, command_type: bytes, payload_bytes: bytes) -> None:
-        """Send a command to the device."""
+        """Send a command to the device.
+
+        :param command_type: 2 bytes containing command type.
+        :param payload_bytes: Variable number of bytes containing arguments.
+        :raises ConnectionError: If not connected to device.
+        """
+        if not self.available:
+            raise ConnectionError("Not connected to device")
 
         # Commands include a timestamp in the payload to prevent replay attacks
         # and that timestamp is set during negotiations

@@ -291,15 +291,31 @@ class C1000(SolixBLEDevice):
         return self._parse_string("d0", begin=1)
 
     async def turn_ac_on(self) -> None:
-        """Turn the AC output on."""
+        """Turn the AC output on.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
         await self._send_command(bytes.fromhex("404a"), bytes.fromhex("a10121a2020101"))
 
     async def turn_ac_off(self) -> None:
-        """Turn the AC output off."""
+        """Turn the AC output off.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
         await self._send_command(bytes.fromhex("404a"), bytes.fromhex("a10121a2020100"))
 
     async def set_light_mode(self, mode: LightStatus) -> None:
-        """Set the light mode of the LED bar."""
+        """Set the light mode of the LED bar.
+
+        :param mode: Mode to set light bar to.
+        :raises ValueError: If requested mode is invalid.
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        if mode is LightStatus.UNKNOWN:
+            raise ValueError("You cannot set the light status to unknown")
         await self._send_command(
             bytes.fromhex("404f"), bytes.fromhex("a10121a20201") + mode.value.to_bytes()
         )
