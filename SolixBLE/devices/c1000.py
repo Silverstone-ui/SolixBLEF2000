@@ -15,6 +15,13 @@ from ..const import (
 from ..device import SolixBLEDevice
 from ..states import LightStatus, PortStatus
 
+CMD_AC_OUTPUT = "404a"
+CMD_LIGHT_MODE = "404f"
+
+PAYLOAD_AC_ON = "a10121a2020101"
+PAYLOAD_AC_OFF = "a10121a2020100"
+PAYLOAD_LIGHT_MODE = "a10121a20201"
+
 
 class C1000(SolixBLEDevice):
     """
@@ -296,7 +303,9 @@ class C1000(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_command(bytes.fromhex("404a"), bytes.fromhex("a10121a2020101"))
+        await self._send_command(
+            cmd=bytes.fromhex(CMD_AC_OUTPUT), payload=bytes.fromhex(PAYLOAD_AC_ON)
+        )
 
     async def turn_ac_off(self) -> None:
         """Turn the AC output off.
@@ -304,7 +313,9 @@ class C1000(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_command(bytes.fromhex("404a"), bytes.fromhex("a10121a2020100"))
+        await self._send_command(
+            cmd=bytes.fromhex(CMD_AC_OUTPUT), payload=bytes.fromhex(PAYLOAD_AC_OFF)
+        )
 
     async def set_light_mode(self, mode: LightStatus) -> None:
         """Set the light mode of the LED bar.
@@ -317,5 +328,6 @@ class C1000(SolixBLEDevice):
         if mode is LightStatus.UNKNOWN:
             raise ValueError("You cannot set the light status to unknown")
         await self._send_command(
-            bytes.fromhex("404f"), bytes.fromhex("a10121a20201") + mode.value.to_bytes()
+            cmd=bytes.fromhex(CMD_LIGHT_MODE),
+            payload=bytes.fromhex(PAYLOAD_LIGHT_MODE) + mode.value.to_bytes(),
         )
