@@ -68,6 +68,7 @@ class SolixBLEDevice:
         self._last_packet_timestamp: datetime | None = None
         self._negotiation_timestamp: float | None = None
         self._state_changed_callbacks: list[Callable[[], None]] = []
+        self._packet_futures: dict[bytes, list[asyncio.Future]] = {}
         self._reconnect_task: asyncio.Task | None = None
         self._expect_disconnect: bool = True
         self._connection_attempts: int = 0
@@ -385,8 +386,22 @@ class SolixBLEDevice:
 
         return parsed_data
 
-    def _parameters_to_str(self, parameters: dict[str, bytes]) -> str:
-        return {k: v.hex() for k, v in parameters.items()}
+    def _parameters_to_str(
+        self, parameters: dict[str, bytes], types: bool = False
+    ) -> str:
+        if types:
+            with_types = {
+                k: {
+                    "bytes": f"""{v}""",
+                    "hex": f"""{v.hex()}""",
+                    "uint": f"""{int.from_bytes(v[1:], byteorder="little")}""",
+                    "int": f"""{int.from_bytes(v[1:], byteorder="little", signed=True)}""",
+                }
+                for k, v in parameters.items()
+            }
+            return json.dumps(with_types, indent=4, sort_keys=True)
+        else:
+            return {k: v.hex() for k, v in parameters.items()}
 
     def _log_diff(self, old: dict[str, bytes], new: dict[str, bytes]) -> None:
         """Log any differences between parameters."""
@@ -450,10 +465,22 @@ class SolixBLEDevice:
         _LOGGER.debug(f"Payload: {payload.hex()}")
         _LOGGER.debug(f"Payload length: {len(payload)}")
 
+        # If the packet has a future registered then we just trigger that
+        # future instead of processing it here
+        if pattern + cmd in self._packet_futures:
+            _LOGGER.debug(
+                "Packet has future(s) registered. Triggering future(s) and ignoring packet..."
+            )
+            for future in self._packet_futures[pattern + cmd]:
+                future.set_result(payload)
+            return
+
+        # Match against common message types
         match pattern.hex():
 
             # Encryption negotiation
             case "030001":
+                _LOGGER.debug("Received encryption negotiation message!")
                 parameters = self._parse_payload(payload)
                 return await self._process_negotiation(cmd, parameters)
 
@@ -464,6 +491,7 @@ class SolixBLEDevice:
 
                     # Telemetry messages
                     case "c402":
+                        _LOGGER.debug("Received telemetry message!")
 
                         # Anker devices seem to split data across multiple
                         # packets so we need to wait until we have both
@@ -503,7 +531,9 @@ class SolixBLEDevice:
                                 f"Decrypted payload: {decrypted_payload.hex()}"
                             )
                             parameters = self._parse_payload(decrypted_payload)
-                            _LOGGER.debug(f"Parameters: {self._parameters_to_str}")
+                            _LOGGER.debug(
+                                f"Parameters: {self._parameters_to_str(parameters, types=True)}"
+                            )
                         except Exception:
                             _LOGGER.exception(
                                 "Exception decrypting unknown message type"
@@ -671,6 +701,67 @@ class SolixBLEDevice:
         # Send packet
         await self._client.write_gatt_char(UUID_COMMAND, packet)
 
+    def _register_future(
+        self, future: asyncio.Future, pattern: bytes, cmd: bytes
+    ) -> None:
+        """Register a future to be triggered when the pattern and cmd bytes are received."""
+
+        # If there are no futures registered for these bytes then we need to
+        # create the list
+        if pattern + cmd not in self._packet_futures:
+            self._packet_futures[pattern + cmd] = [future]
+
+        # Else we add our future to the futures for these bytes
+        else:
+            self._packet_futures[pattern + cmd].append(future)
+
+    def _deregister_future(
+        self, future: asyncio.Future, pattern: bytes, cmd: bytes
+    ) -> None:
+        """Deregister a future to be triggered when the pattern and cmd bytes are received."""
+
+        # If there are no futures registered for these bytes we do nothing
+        if pattern + cmd not in self._packet_futures:
+            return
+
+        # If the future is not set for these bytes we do nothing
+        if future not in self._packet_futures.get(pattern + cmd):
+            return
+
+        # Otherwise remove the future from the list of futures for these bytes
+        self._packet_futures.get(pattern + cmd).remove(future)
+
+        # If there are no futures left for these bytes then remove the key
+        if len(self._packet_futures.get(pattern + cmd)) == 0:
+            self._packet_futures.pop(pattern + cmd)
+
+    async def _listen_for_packet(
+        self, pattern: bytes, cmd: bytes, timeout: int = 10
+    ) -> bytes | None:
+        """Wait for a response and return its payload bytes.
+
+        Use this to listen for a response to a command and get the payload
+        returned. This will block until a matching packet is received or
+        the timeout is reached.
+
+        Note that this will override any built in parsing of the
+        packet (i.e if you listen for a regular telemetry packet that packet
+        will not be used to automatically populate device attributes).
+
+        :param pattern: 3 byte pattern (e.g 03010f).
+        :param cmd: 2 byte command (e.g c402).
+        :param timeout: Maximum time to wait for matching response.
+        :returns: Payload bytes if response found else None.
+        """
+        future = asyncio.Future()
+        try:
+            self._register_future(future, pattern, cmd)
+            return await asyncio.wait_for(future, timeout)
+        except asyncio.CancelledError:
+            return None
+        finally:
+            self._deregister_future(future, pattern, cmd)
+
     def _run_state_changed_callbacks(self) -> None:
         """Execute all registered callbacks for a state change."""
         for function in self._state_changed_callbacks:
@@ -735,7 +826,7 @@ class SolixBLEDevice:
             )
 
     def _reset_session(self):
-        """Reset negotiated variables and data."""
+        """Reset negotiated variables and data and futures."""
         self._p46 = None
         self._p242 = None
         self._data = None
@@ -744,6 +835,7 @@ class SolixBLEDevice:
         self._last_packet_timestamp = None
         self._last_data_timestamp = None
         self._negotiation_timestamp = None
+        self._packet_futures: dict[bytes, list[asyncio.Future]] = {}
 
     def __str__(self) -> str:
         """Return string representation of device state."""
