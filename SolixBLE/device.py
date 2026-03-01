@@ -367,7 +367,22 @@ class SolixBLEDevice:
 
         while len(remaining_data) != 0:
             try:
+                # Extract param id (e.g a1, a2, ...)
                 param_id = bytes([remaining_data.pop(0)]).hex()
+
+                # Sometimes there is just a param_id with no length or values
+                # and then padding after that. This has been observed during
+                # the optional stage 6 negotiation stage that only sometimes
+                # seems to happen with the C300X (~ 1/20 chance).
+                #
+                # If we have reached PKCS7 padding then we have
+                # reached the end of the payload
+                if len(remaining_data) < 16 and remaining_data == bytearray(
+                    len(remaining_data) * len(remaining_data).to_bytes(1)
+                ):
+                    parsed_data[param_id] = bytes()
+                    break
+
                 param_len = remaining_data.pop(0)
                 param_data = bytes([remaining_data.pop(0) for _ in range(0, param_len)])
                 parsed_data[param_id] = param_data
@@ -490,8 +505,7 @@ class SolixBLEDevice:
             # Encryption negotiation
             case "030001":
                 _LOGGER.debug("Received encryption negotiation message!")
-                parameters = self._parse_payload(payload)
-                return await self._process_negotiation(cmd, parameters)
+                return await self._process_negotiation(cmd, payload)
 
             # Encrypted messages
             case "03010f":
@@ -553,9 +567,7 @@ class SolixBLEDevice:
                     f"Unexpected packet type '{pattern}' sent by device! Packet: {data.hex()}"
                 )
 
-    async def _process_negotiation(
-        self, cmd: bytes, parameters: dict[str, bytes]
-    ) -> None:
+    async def _process_negotiation(self, cmd: bytes, payload: bytes) -> None:
         """Negotiate encryption with the device."""
 
         match cmd.hex():
@@ -570,6 +582,7 @@ class SolixBLEDevice:
                 _LOGGER.debug(
                     "Entered negotiation stage 1 due to response from device!"
                 )
+                parameters = self._parse_payload(payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 _LOGGER.debug("Sending stage 1 response message...")
                 return await self._client.write_gatt_char(
@@ -581,6 +594,7 @@ class SolixBLEDevice:
                 _LOGGER.debug(
                     "Entered negotiation stage 2 due to response from device!"
                 )
+                parameters = self._parse_payload(payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 _LOGGER.debug("Sending stage 2 response message...")
                 return await self._client.write_gatt_char(
@@ -592,6 +606,7 @@ class SolixBLEDevice:
                 _LOGGER.debug(
                     "Entered negotiation stage 3 due to response from device!"
                 )
+                parameters = self._parse_payload(payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 self._negotiation_timestamp = time.time()
                 _LOGGER.debug("Sending stage 3 response message...")
@@ -604,6 +619,7 @@ class SolixBLEDevice:
                 _LOGGER.debug(
                     "Entered negotiation stage 4 due to response from device!"
                 )
+                parameters = self._parse_payload(payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 _LOGGER.debug("Sending stage 4 response message...")
                 return await self._client.write_gatt_char(
@@ -615,6 +631,7 @@ class SolixBLEDevice:
                 _LOGGER.debug(
                     "Entered negotiation stage 5 due to response from device!"
                 )
+                parameters = self._parse_payload(payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
 
                 # Extract public key of device from payload
@@ -642,6 +659,18 @@ class SolixBLEDevice:
                 return await self._client.write_gatt_char(
                     UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_5)
                 )
+
+            # Negotiation stage 6 (Optional)
+            # Some devices (e.g C300X) sometimes send an extra message after
+            # stage 5 but others (e.g C1000) do not. No response is needed
+            # but it does not hurt to decrypt it anyway.
+            case "4822":
+                _LOGGER.debug(
+                    "Entered negotiation stage 6 (optional) due to response from device!"
+                )
+                decrypted_payload = self._decrypt_payload(payload)
+                parameters = self._parse_payload(decrypted_payload)
+                _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
 
             case _:
                 _LOGGER.warning(
