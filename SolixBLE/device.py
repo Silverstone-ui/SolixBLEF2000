@@ -436,10 +436,19 @@ class SolixBLEDevice:
                 f"Telemetry parameters: {self._parameters_to_str(parameters)}"
             )
 
-            # Print state update if changes and last is not none
-            if state_changed and self._data is not None:
-                _LOGGER.debug("Parameters have changed since previous update!")
-                self._log_diff(self._data, parameters)
+            # Print state update if changes
+            if state_changed:
+
+                # If we have previous data to compare against log the diff
+                if self._data is not None:
+                    _LOGGER.debug("Parameters have changed since previous update!")
+                    self._log_diff(self._data, parameters)
+
+                # Else log the parameters but with the types
+                else:
+                    _LOGGER.debug(
+                        f"Telemetry parameters: {self._parameters_to_str(parameters, types=True)}"
+                    )
 
         # Update internal parameters
         self._data = parameters
