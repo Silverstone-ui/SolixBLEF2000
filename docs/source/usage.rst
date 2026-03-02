@@ -21,7 +21,7 @@ state of the device changes.
 .. note::
     State updates are only sent when something changes, they can vary from every second
     if something is drawing a varying amount of power, to every 15s if the device is 
-    relatively idle.
+    relatively idle. Some devices support requesting a status update manually.
 
 
 Functions
@@ -84,7 +84,17 @@ Automatic Reconnection
 ^^^^^^^^^^^^^^^^^^^^^^
 
 This module will attempt to automatically reconnect to a power station
-if the connection is lost. 
+if the connection is lost. If the module is able to reconnect within the
+disconnect timeout period no callbacks will be triggered, the cached data 
+remains until it is replaced and it will be as if nothing happened. The exception
+to this is that any commands waiting for a response will timeout. If the module
+is not able to automatically reconnect within the time limit the callbacks will
+be triggered and the cached device data (e.g power out, light status, etc) will
+be cleared, if the module is then able to automatically reconnect, the callbacks
+will be triggered again. If you wish to implement your own retry logic it may
+interfere with the automatic reconnection, in this case it is recommended
+to disable automatic reconnection by setting the maximum reconnect attempts
+value to 0.
 
 .. note::
 
