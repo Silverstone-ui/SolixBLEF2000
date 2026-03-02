@@ -11,6 +11,7 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import datetime
+from functools import partial
 
 from bleak import BleakClient, BleakError
 from bleak.backends.client import BaseBleakClient
@@ -69,8 +70,8 @@ class SolixBLEDevice:
         self._negotiation_timestamp: float | None = None
         self._state_changed_callbacks: list[Callable[[], None]] = []
         self._packet_futures: dict[bytes, list[asyncio.Future]] = {}
-        self._reconnect_task: asyncio.Task | None = None
-        self._expect_disconnect: bool = True
+        self._auto_reconnect_task: asyncio.Task | None = None
+        self._disconnect_event: asyncio.Event = asyncio.Event()
         self._connection_attempts: int = 0
         self._shared_key: bytes | None = None
         self._iv: bytes | None = None
@@ -102,42 +103,35 @@ class SolixBLEDevice:
         :param max_attempts: Maximum number of attempts to try to connect (default=3).
         :param run_callbacks: Execute registered callbacks on successful connection (default=True).
         """
+        self._connection_attempts = self._connection_attempts + 1
 
-        # If we are not connected then connect
-        if not self.connected:
-            self._connection_attempts += 1
-            _LOGGER.debug(
-                f"Connecting to '{self.name}' with address '{self.address}'..."
+        try:
+
+            # If we have an old client get rid of it
+            if self._client is not None and self._client.is_connected:
+                _LOGGER.debug(
+                    f"Disposing of old client '{self._client}' in order to connect to '{self.name}'!"
+                )
+                await self._client.disconnect()
+                self._client = None
+
+            # Reset negotiated details but keep any data
+            self._reset_session(reset_data=False)
+
+            # Make new client and connect
+            self._client = await establish_connection(
+                BleakClient,
+                device=self._ble_device,
+                name=self.address,
+                max_attempts=max_attempts,
+                use_services_cache=False,
+                disconnected_callback=self._disconnect_callback,
             )
 
-            try:
-
-                # If we have an old client get rid of it
-                if self._client is not None and self._client.is_connected:
-                    _LOGGER.debug(
-                        f"Disposing of old client '{self._client}' in order to connect to '{self.name}'!"
-                    )
-                    self._expect_disconnect = True
-                    await self._client.disconnect()
-                    self._client = None
-
-                # Reset negotiated details
-                self._reset_session()
-
-                # Make new client and connect
-                self._client = await establish_connection(
-                    BleakClient,
-                    device=self._ble_device,
-                    name=self.address,
-                    max_attempts=max_attempts,
-                    use_services_cache=False,
-                    disconnected_callback=self._disconnect_callback,
-                )
-
-            except BleakError:
-                _LOGGER.exception(
-                    f"Error establishing initial connection to '{self.name}'!"
-                )
+        except BleakError:
+            _LOGGER.exception(
+                f"Error establishing initial connection to '{self.name}'!"
+            )
 
         # If we are still not connected then we have failed
         if not self.connected:
@@ -151,7 +145,9 @@ class SolixBLEDevice:
         )
         try:
             _LOGGER.debug(f"Subscribing to notifications from device '{self.name}'!")
-            await self._client.start_notify(UUID_TELEMETRY, self._process_notification)
+            await self._client.start_notify(
+                UUID_TELEMETRY, partial(self._process_notification, self._client)
+            )
         except BleakError:
             _LOGGER.exception(f"Error subscribing/negotiating with '{self.name}'!")
             return False
@@ -194,8 +190,15 @@ class SolixBLEDevice:
 
         # If negotiations succeeded
         _LOGGER.debug(f"Negotiations with '{self.name}' succeeded!")
-        self._expect_disconnect = False
         self._connection_attempts = 0
+
+        # Clear disconnect event if set
+        if self._disconnect_event.is_set():
+            self._disconnect_event.clear()
+
+        # Start an automatic reconnect task if its not running already
+        if self._auto_reconnect_task is None:
+            self._auto_reconnect_task = asyncio.create_task(self._auto_reconnect())
 
         # Execute callbacks if enabled
         if run_callbacks:
@@ -206,9 +209,15 @@ class SolixBLEDevice:
     async def disconnect(self) -> None:
         """Disconnect from device and reset internal state.
 
-        Disconnects from device and does not execute callbacks.
+        Disconnects from device, resets internal state, including connection
+        attempts, cancels the automatic reconnection task and will not execute
+        state changes callbacks.
         """
-        self._expect_disconnect = True
+
+        # Cancel the automatic reconnection task
+        if self._auto_reconnect_task is not None:
+            self._auto_reconnect_task.cancel()
+
         self._connection_attempts = 0
         self._reset_session()
 
@@ -474,8 +483,16 @@ class SolixBLEDevice:
             _LOGGER.debug(self)
             self._run_state_changed_callbacks()
 
-    async def _process_notification(self, handle: int, data: bytearray) -> None:
+    async def _process_notification(
+        self, client: BleakClient, handle: int, data: bytearray
+    ) -> None:
         """Process a notification from the device."""
+
+        _LOGGER.debug(f"The client the notification is from is: {client}")
+
+        if self._client is not client:
+            _LOGGER.debug("Ignoring notification from old client")
+            return
 
         # Split packet into pattern, command, and payload
         _LOGGER.debug(
@@ -811,73 +828,137 @@ class SolixBLEDevice:
         for function in self._state_changed_callbacks:
             function()
 
-    async def _reconnect(self) -> None:
-        """Re-connect to device and run state change callbacks on timeout/failure."""
-        _LOGGER.debug(f"Attempting to re-connect to '{self.name}'!")
-        try:
-            async with asyncio.timeout(DISCONNECT_TIMEOUT):
-                await self.disconnect()
-                await asyncio.sleep(RECONNECT_DELAY)
-                await self.connect(run_callbacks=False)
-                if self.available:
-                    _LOGGER.debug(f"Successfully re-connected to '{self.name}'!")
-                else:
-                    _LOGGER.warning(f"Failed to re-connect to '{self.name}'!")
+    async def _auto_reconnect(self) -> None:
+        """Task designed to be run in background to automatically reconnect.
 
-        except TimeoutError:
-            _LOGGER.exception(f"Timed out attempting to re-connect to '{self.name}'!")
-            self._run_state_changed_callbacks()
+        This task is executed automatically when a successful connection
+        is made and while the connection attempt limit is not exceeded it
+        will attempt to re-connect when a disconnect event is signalled.
+
+        This background task is cancelled when disconnect is called.
+        """
+
+        def _can_retry() -> bool:
+            return (
+                self._connection_attempts < RECONNECT_ATTEMPTS_MAX
+                or RECONNECT_ATTEMPTS_MAX == -1
+            )
+
+        try:
+
+            # If callbacks need to be run on reconnection, we silently
+            # reconnect if the timeout has not been exceeded, else we
+            # run callbacks to let subscribers know we were disconnected
+            run_callbacks_on_reconnect = False
+
+            while _can_retry():
+
+                # If we are already connected and negotiated then wait for disconnection
+                if self.negotiated:
+                    _LOGGER.debug(
+                        f"Automatic reconnect task ready and waiting for disconnect event from '{self.name}'!"
+                    )
+                    await self._disconnect_event.wait()
+                    _LOGGER.debug(
+                        f"Disconnection event signalled by '{self.name}', starting reconnection..."
+                    )
+                else:
+                    _LOGGER.debug(
+                        f"We are still not connected to '{self.name}', starting reconnection..."
+                    )
+
+                # If we have reached this stage we are not connected
+
+                try:
+                    # Limit on amount of time we can stay disconnected before
+                    # we have to trigger callbacks to let subscribers know we
+                    # are disconnected
+                    async with asyncio.timeout(DISCONNECT_TIMEOUT):
+
+                        while _can_retry():
+
+                            await asyncio.sleep(RECONNECT_DELAY)
+
+                            try:
+                                attempt_number = self._connection_attempts
+                                if await self.connect(
+                                    run_callbacks=run_callbacks_on_reconnect
+                                ):
+                                    _LOGGER.debug(
+                                        f"""Successfully reconnected to '{self.name}' {"silently" if not run_callbacks_on_reconnect else ""} on attempt {attempt_number}!"""
+                                    )
+
+                                    # Reset back to false on successful connection
+                                    run_callbacks_on_reconnect = False
+
+                                    # Break out of this loop back to loop waiting for disconnect event
+                                    break
+                            except Exception:
+                                _LOGGER.exception(
+                                    f"""Exception raised attempting to {"silently" if not run_callbacks_on_reconnect else ""} reconnect to '{self.name}'!"""
+                                )
+
+                # If timeout exceeded
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        f"Timed out attempting to silently reconnect to '{self.name}', callbacks will be triggered due to disconnect!"
+                    )
+                    self._reset_session(reset_data=True)
+                    self._run_state_changed_callbacks()
+
+                    # If we ran callbacks due to a disconnect we will
+                    # need to run them again on reconnect
+                    run_callbacks_on_reconnect = True
+
+            else:
+                _LOGGER.warning("Maximum reconnect limit exceeded!")
+
+        except asyncio.CancelledError:
+            _LOGGER.debug("Automatic reconnect task has been canceled/stopped")
+
+        except Exception:
+            _LOGGER.exception("Unexpected exception in automatic reconnect task!")
 
     def _disconnect_callback(self, client: BaseBleakClient) -> None:
-        """Re-connect on unexpected disconnect and run callbacks on failure.
+        """Callback executed by bleak when the connection is lost.
 
-        This function will re-connect if this is not an expected
-        disconnect and if it fails to re-connect it will run
-        state changed callbacks. If the re-connect is successful then
-        no callbacks are executed.
+        This clears the negotiated values which are now invalid
+        and will need to be re-negotiated. This does not clear the
+        cached properties of the device, that will only be cleared
+        if the re-connection fails. This also triggers the
+        disconnection event which will result in the automatic
+        reconnection task attempting to reconnect.
 
         :param client: Bleak client.
         """
 
         # Ignore disconnect callbacks from old clients
-        if client != self._client:
+        if client is not self._client:
             _LOGGER.debug(
                 f"Disconnect of '{self.name}' came from other client. Ignoring..."
             )
             return
 
-        # Reset internal state
-        self._reset_session()
+        _LOGGER.debug(f"Connection lost to '{self.name}'!")
 
-        # If we expected the disconnect then we don't try to reconnect.
-        if self._expect_disconnect:
-            _LOGGER.debug(f"Received expected disconnect from '{client}'.")
-            return
+        # Reset session specific state variables but keep the cached data
+        self._reset_session(reset_data=False)
 
-        # Else we did not expect the disconnect and must re-connect if
-        # there are attempts remaining
-        _LOGGER.info(f"Unexpected disconnect from '{client}'!")
-        if (
-            RECONNECT_ATTEMPTS_MAX == -1
-            or self._connection_attempts < RECONNECT_ATTEMPTS_MAX
-        ):
-            # Try and reconnect
-            self._reconnect_task = asyncio.create_task(self._reconnect())
+        # Trigger disconnection event
+        self._disconnect_event.set()
 
-        else:
-            _LOGGER.warning(
-                f"Maximum re-connect attempts to '{client}' exceeded. Auto re-connect disabled!"
-            )
-
-    def _reset_session(self):
+    def _reset_session(self, reset_data: bool = True):
         """Reset negotiated variables and data and futures."""
+
+        if reset_data:
+            self._data = None
+            self._last_data_timestamp = None
+
         self._p46 = None
         self._p242 = None
-        self._data = None
         self._shared_key = None
         self._iv = None
         self._last_packet_timestamp = None
-        self._last_data_timestamp = None
         self._negotiation_timestamp = None
         self._packet_futures: dict[bytes, list[asyncio.Future]] = {}
 
