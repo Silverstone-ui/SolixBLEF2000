@@ -22,6 +22,16 @@ class PortStatus(Enum):
     #: The port is an input.
     INPUT = 2
 
+    @classmethod
+    def from_input_only(cls, value: int):
+        """Custom factory for ports which only support being inputs."""
+
+        # If it would be an input (i.e 1) set it to output (i.e 2).
+        if value == PortStatus.INPUT:
+            value = PortStatus.OUTPUT
+
+        return cls(value)
+
 
 class ChargingStatus(Enum):
     """The status of charging/discharging on a device."""
