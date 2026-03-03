@@ -826,7 +826,12 @@ class SolixBLEDevice:
     def _run_state_changed_callbacks(self) -> None:
         """Execute all registered callbacks for a state change."""
         for function in self._state_changed_callbacks:
-            function()
+            try:
+                function()
+            except Exception:
+                _LOGGER.exception(
+                    f"Exception raised by a registered state change callback '{function}'!"
+                )
 
     async def _auto_reconnect(self) -> None:
         """Task designed to be run in background to automatically reconnect.
