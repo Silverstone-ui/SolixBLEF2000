@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from ..const import DEFAULT_METADATA_BOOL, DEFAULT_METADATA_FLOAT, DEFAULT_METADATA_INT
 from ..device import SolixBLEDevice
-from ..states import ChargingStatusC300DC, LightStatus, PortStatus
+from ..states import ChargingStatus, LightStatus, PortStatus
 
 
 class C300DC(SolixBLEDevice):
@@ -18,20 +18,17 @@ class C300DC(SolixBLEDevice):
     Use this class to connect and monitor a C300(X) DC power station.
     This model is also known as the A1728.
 
-    .. note::
-        This model was added using data from anker-solix-api. It has not been
-        tested!
-
-    .. note::
-        It should be possible to add more sensors. I think devices with lots of
-        telemetry values split them up into multiple messages but I have not
-        played around with this yet. That and I am being a bit conservative with
-        these initial implementations, if you want more sensors and are willing
-        to help with testing feel free to raise a GitHub issue.
-
     """
 
     _EXPECTED_TELEMETRY_LENGTH: int = 253
+
+    @property
+    def dc_output_timeout(self) -> int:
+        """DC output timeout in seconds.
+
+        :returns: DC output timeout or default int value.
+        """
+        return self._parse_int("a2", begin=1)
 
     @property
     def hours_remaining(self) -> float:
@@ -134,10 +131,10 @@ class C300DC(SolixBLEDevice):
         return self._parse_int("a9", begin=1)
 
     @property
-    def dc_power_in(self) -> int:
-        """DC Power In.
+    def dc_power_out(self) -> int:
+        """DC Power Out.
 
-        :returns: DC power in or default int value.
+        :returns: DC power out or default int value.
         """
         return self._parse_int("aa", begin=1)
 
@@ -174,12 +171,12 @@ class C300DC(SolixBLEDevice):
         return self._parse_int("b5", begin=1, signed=True)
 
     @property
-    def charging_status(self) -> ChargingStatusC300DC:
+    def charging_status(self) -> ChargingStatus:
         """Charging status of the device.
 
         :returns: Status of charging.
         """
-        return ChargingStatusC300DC(self._parse_int("b6", begin=1))
+        return ChargingStatus(self._parse_int("b6", begin=1))
 
     @property
     def battery_percentage(self) -> int:
@@ -246,26 +243,6 @@ class C300DC(SolixBLEDevice):
         return PortStatus(self._parse_int("be", begin=1))
 
     @property
-    def is_light_on(self) -> bool:
-        """Status of main light.
-
-        :returns: Is main light on or default bool value.
-        """
-        return (
-            bool(self._parse_int("bf", begin=1))
-            if self._data is not None
-            else DEFAULT_METADATA_BOOL
-        )
-
-    @property
-    def dc_output_timeout(self) -> int:
-        """DC output timeout in seconds.
-
-        :returns: DC output timeout or default int value.
-        """
-        return PortStatus(self._parse_int("c4", begin=1))
-
-    @property
     def display_timeout(self) -> int:
         """Display timeout in seconds.
 
@@ -274,9 +251,21 @@ class C300DC(SolixBLEDevice):
         return self._parse_int("c5", begin=1)
 
     @property
-    def display_mode(self) -> LightStatus:
-        """Display mode / Brightness.
+    def light(self) -> LightStatus:
+        """Light Status.
 
-        :returns: Status of the display.
+        :returns: Status of the light bar.
         """
         return LightStatus(self._parse_int("c8", begin=1))
+
+    @property
+    def display_switch(self) -> bool:
+        """Display switch status.
+
+        :returns: Status of the display switch.
+        """
+        return (
+            bool(self._parse_int("ca", begin=1))
+            if self._data is not None
+            else DEFAULT_METADATA_BOOL
+        )

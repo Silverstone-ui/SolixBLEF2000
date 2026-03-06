@@ -20,7 +20,6 @@ from .devices import (
 )
 from .states import (
     ChargingStatus,
-    ChargingStatusC300DC,
     ChargingStatusF3800,
     DisplayTimeout,
     LightStatus,
