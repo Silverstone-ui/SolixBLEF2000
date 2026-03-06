@@ -243,12 +243,52 @@ class C300DC(SolixBLEDevice):
         return PortStatus(self._parse_int("be", begin=1))
 
     @property
-    def display_timeout(self) -> int:
-        """Display timeout in seconds.
+    def dc_port(self) -> PortStatus:
+        """DC Port Status.
 
-        :returns: Display timeout or default in value.
+        :returns: Status of the DC port.
+        """
+        return PortStatus(self._parse_int("bf", begin=1))
+
+    @property
+    def device_overload(self) -> int:
+        """Device overload status.
+
+        :returns: Device overload status or default in value.
+        """
+        return self._parse_int("c1", begin=1)
+
+    @property
+    def serial_number(self) -> str:
+        """Serial number.
+
+        :returns: The serial number of the device.
+        """
+        return self._parse_string("c3", begin=1)
+
+    @property
+    def device_timeout(self) -> int:
+        """Configured device timeout in minutes.
+
+        :returns: Configured device timeout or default in value.
+        """
+        return self._parse_int("c4", begin=1)
+
+    @property
+    def display_timeout(self) -> int:
+        """Configured display timeout in seconds.
+
+        :returns: Configured display timeout or default in value.
         """
         return self._parse_int("c5", begin=1)
+
+    @property
+    def display_mode(self) -> int:
+        """Configured display mode.
+
+        :returns: Configured display mode or default in value.
+        """
+        return self._parse_int("c7", begin=1)
 
     @property
     def light(self) -> LightStatus:
@@ -259,6 +299,14 @@ class C300DC(SolixBLEDevice):
         return LightStatus(self._parse_int("c8", begin=1))
 
     @property
+    def temperature_unit(self) -> int:
+        """Configured temperature unit (returned temperature is always in degrees C).
+
+        :returns: Configured temperature unit or default in value.
+        """
+        return self._parse_int("c9", begin=1)
+
+    @property
     def display_switch(self) -> bool:
         """Display switch status.
 
@@ -266,6 +314,26 @@ class C300DC(SolixBLEDevice):
         """
         return (
             bool(self._parse_int("ca", begin=1))
+            if self._data is not None
+            else DEFAULT_METADATA_BOOL
+        )
+
+    @property
+    def light_timeout(self) -> int:
+        """Configured light timeout in minutes.
+
+        :returns: Configured light timeout or default in value.
+        """
+        return self._parse_int("cb", begin=1)
+
+    @property
+    def solar_port_active(self) -> bool:
+        """Solar Port Status.
+
+        :returns: Status of the solar port.
+        """
+        return (
+            bool(self._parse_int("cd", begin=1))
             if self._data is not None
             else DEFAULT_METADATA_BOOL
         )
