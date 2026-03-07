@@ -12,6 +12,15 @@ connection back on by pressing the connection button causes it to disconnect fro
 It may be possible to send a special command to the power station to use both at the same time, but this has not been experimented with.
 
 
+Bluetooth connection
+--------------------
+
+It has been observed that some devices (e.g C300) will stop advertising if they are not connected
+for a significant period of time, this means the device will be undiscoverable and it will not be, 
+possible to connect to it. This behavior has been observed even with the connection light blinking.
+The solution to this issue (as it often is with software issues) is to turn the device off then on again.
+
+
 Device support
 --------------
 
