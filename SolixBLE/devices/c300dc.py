@@ -163,6 +163,25 @@ class C300DC(SolixBLEDevice):
         return self._parse_int("ad", begin=1)
 
     @property
+    def battery_capacity(self) -> int:
+        """Current battery capacity in mAh.
+
+        :returns: Current battery capacity or default int value.
+        """
+        return self._parse_int("af", begin=1)
+
+    @property
+    def software_version(self) -> str:
+        """Main software version.
+
+        :returns: Firmware version or default str value.
+        """
+        if self._data is None:
+            return DEFAULT_METADATA_STRING
+
+        return ".".join([digit for digit in str(self._parse_int("b0", begin=1))])
+
+    @property
     def temperature(self) -> int:
         """Temperature of the unit (C).
 
