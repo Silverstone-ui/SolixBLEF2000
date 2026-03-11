@@ -9,7 +9,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../../SolixBLE"))
+sys.path.insert(0, os.path.abspath("../../"))
 
 project = "SolixBLE"
 copyright = "2026, Harvey Lelliott"
