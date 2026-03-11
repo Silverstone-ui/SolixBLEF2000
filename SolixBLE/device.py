@@ -8,17 +8,26 @@ import asyncio
 import inspect
 import json
 import logging
+import time
 from collections.abc import Callable
 from datetime import datetime
+from functools import partial
 
 from bleak import BleakClient, BleakError
 from bleak.backends.client import BaseBleakClient
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
 from Crypto.Cipher import AES
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.ec import (
+    ECDH,
+    SECP256R1,
+    EllipticCurvePublicKey,
+    derive_private_key,
+)
+from cryptography.hazmat.primitives.padding import PKCS7
 
 from .const import (
+    BASE_TIMESTAMP,
     DEFAULT_METADATA_INT,
     DEFAULT_METADATA_STRING,
     DISCONNECT_TIMEOUT,
@@ -28,6 +37,7 @@ from .const import (
     NEGOTIATION_COMMAND_3,
     NEGOTIATION_COMMAND_4,
     NEGOTIATION_COMMAND_5,
+    NEGOTIATION_RESPONSE_TIMEOUT,
     NEGOTIATION_TIMEOUT,
     PRIVATE_KEY,
     RECONNECT_ATTEMPTS_MAX,
@@ -52,14 +62,17 @@ class SolixBLEDevice:
 
         self._ble_device: BLEDevice = ble_device
         self._client: BleakClient | None = None
+        self._telemetry_payload_small: bytes | None = None
+        self._telemetry_payload_large: bytes | None = None
         self._data: dict[str, bytes] | None = None
         self._last_data_timestamp: datetime | None = None
-        self._supports_telemetry: bool = False
+        self._last_packet_timestamp: datetime | None = None
+        self._negotiation_timestamp: float | None = None
         self._state_changed_callbacks: list[Callable[[], None]] = []
-        self._reconnect_task: asyncio.Task | None = None
-        self._expect_disconnect: bool = True
+        self._packet_futures: dict[bytes, list[asyncio.Future]] = {}
+        self._auto_reconnect_task: asyncio.Task | None = None
+        self._disconnect_event: asyncio.Event = asyncio.Event()
         self._connection_attempts: int = 0
-        self._number_of_received_packets: int = 0
         self._shared_key: bytes | None = None
         self._iv: bytes | None = None
 
@@ -90,46 +103,35 @@ class SolixBLEDevice:
         :param max_attempts: Maximum number of attempts to try to connect (default=3).
         :param run_callbacks: Execute registered callbacks on successful connection (default=True).
         """
+        self._connection_attempts = self._connection_attempts + 1
 
-        # If we are not connected then connect
-        if not self.connected:
-            self._connection_attempts += 1
-            _LOGGER.debug(
-                f"Connecting to '{self.name}' with address '{self.address}'..."
+        try:
+
+            # If we have an old client get rid of it
+            if self._client is not None and self._client.is_connected:
+                _LOGGER.debug(
+                    f"Disposing of old client '{self._client}' in order to connect to '{self.name}'!"
+                )
+                await self._client.disconnect()
+                self._client = None
+
+            # Reset negotiated details but keep any data
+            self._reset_session(reset_data=False)
+
+            # Make new client and connect
+            self._client = await establish_connection(
+                BleakClient,
+                device=self._ble_device,
+                name=self.address,
+                max_attempts=max_attempts,
+                use_services_cache=False,
+                disconnected_callback=self._disconnect_callback,
             )
 
-            try:
-
-                # If we have an old client get rid of it
-                if self._client is not None and self._client.is_connected:
-                    _LOGGER.debug(
-                        f"Disposing of old client '{self._client}' in order to connect to '{self.name}'!"
-                    )
-                    self._expect_disconnect = True
-                    await self._client.disconnect()
-                    self._client = None
-
-                # Reset negotiated details
-                self._supports_telemetry = False
-                self._number_of_received_packets = 0
-                self._shared_key = None
-                self._iv = None
-
-                # Make new client and connect
-                self._client = await establish_connection(
-                    BleakClient,
-                    device=self._ble_device,
-                    name=self.address,
-                    max_attempts=max_attempts,
-                    use_services_cache=False,
-                    disconnected_callback=self._disconnect_callback,
-                )
-                await asyncio.sleep(3)
-
-            except BleakError:
-                _LOGGER.exception(
-                    f"Error establishing initial connection to '{self.name}'!"
-                )
+        except BleakError:
+            _LOGGER.exception(
+                f"Error establishing initial connection to '{self.name}'!"
+            )
 
         # If we are still not connected then we have failed
         if not self.connected:
@@ -141,45 +143,62 @@ class SolixBLEDevice:
         _LOGGER.debug(
             f"Established initial connection to '{self.name}' on attempt {self._connection_attempts}!"
         )
-
-        # If we are not subscribed to telemetry then check that
-        # we can and then subscribe
-        if not self.available:
-            _LOGGER.debug(f"Setting up session for '{self.name}'...")
-            try:
-                await self._determine_services()
-                await self._subscribe_to_services()
-            except BleakError:
-                _LOGGER.exception(f"Error subscribing/negotiating with '{self.name}'!")
-                return False
-
-        # Send negotiation initiation requests until the device responds
-        while self._number_of_received_packets == 0:
-            await asyncio.sleep(3)
-            _LOGGER.debug(
-                f"Sending negotiations initiation request to '{self.name}'..."
+        try:
+            _LOGGER.debug(f"Subscribing to notifications from device '{self.name}'!")
+            await self._client.start_notify(
+                UUID_TELEMETRY, partial(self._process_notification, self._client)
             )
-            await self._client.write_gatt_char(
-                UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_0), response=True
-            )
-            _LOGGER.debug(f"Sent negotiation initiation request to '{self.name}'!")
-            await asyncio.sleep(3)
+        except BleakError:
+            _LOGGER.exception(f"Error subscribing/negotiating with '{self.name}'!")
+            return False
 
-        # Wait for negotiations to finish and catch and print any errors
-        _LOGGER.debug(f"Device '{self.name}' responded to negotiation request...")
-        _LOGGER.debug(f"Waiting for negotiations with '{self.name}' to finish...")
+        # Negotiate
         try:
             async with asyncio.timeout(NEGOTIATION_TIMEOUT):
-                while not self.available:
-                    await asyncio.sleep(1)
+
+                # While negotiations have not completed
+                while not self.negotiated:
+
+                    # If we have not received any packet from the device in
+                    # any stage then restart negotiations from the start
+                    if (
+                        self._last_packet_timestamp is None
+                        or (time.time() - self._last_packet_timestamp)
+                        > NEGOTIATION_RESPONSE_TIMEOUT
+                    ):
+
+                        _LOGGER.debug(
+                            f"Sending negotiation initiation request to '{self.name}'..."
+                        )
+                        await self._client.write_gatt_char(
+                            UUID_COMMAND,
+                            bytes.fromhex(NEGOTIATION_COMMAND_0),
+                            response=True,
+                        )
+
+                    # Wait at this long to see if we get any response to
+                    # our initial request in stage 0. This weird layout
+                    # allows us to exit immediately when negotiation occurs
+                    for _ in range(0, NEGOTIATION_RESPONSE_TIMEOUT):
+                        await asyncio.sleep(1)
+                        if self.negotiated:
+                            break
+
         except TimeoutError:
             _LOGGER.exception(f"Timed out attempting to negotiate with '{self.name}'!")
             return False
 
         # If negotiations succeeded
         _LOGGER.debug(f"Negotiations with '{self.name}' succeeded!")
-        self._expect_disconnect = False
         self._connection_attempts = 0
+
+        # Clear disconnect event if set
+        if self._disconnect_event.is_set():
+            self._disconnect_event.clear()
+
+        # Start an automatic reconnect task if its not running already
+        if self._auto_reconnect_task is None:
+            self._auto_reconnect_task = asyncio.create_task(self._auto_reconnect())
 
         # Execute callbacks if enabled
         if run_callbacks:
@@ -190,14 +209,17 @@ class SolixBLEDevice:
     async def disconnect(self) -> None:
         """Disconnect from device and reset internal state.
 
-        Disconnects from device and does not execute callbacks.
+        Disconnects from device, resets internal state, including connection
+        attempts, cancels the automatic reconnection task and will not execute
+        state changes callbacks.
         """
-        self._supports_telemetry = False
-        self._expect_disconnect = True
+
+        # Cancel the automatic reconnection task
+        if self._auto_reconnect_task is not None:
+            self._auto_reconnect_task.cancel()
+
         self._connection_attempts = 0
-        self._number_of_received_packets = 0
-        self._shared_key = None
-        self._iv = None
+        self._reset_session()
 
         # If there is a client disconnect and throw it away
         if self._client:
@@ -208,23 +230,37 @@ class SolixBLEDevice:
     def connected(self) -> bool:
         """Connected to device.
 
+        This does not mean that an encrypted connection has been
+        established or that any data values have been populated,
+        use the available property to determine that.
+
         :returns: True/False if connected to device.
         """
         return self._client is not None and self._client.is_connected
 
     @property
-    def available(self) -> bool:
-        """Connected to device and receiving data from it.
+    def negotiated(self) -> bool:
+        """Has an encrypted session been successfully negotiated.
 
-        :returns: True/False if the device is connected and sending telemetry.
+        This does not mean that any data values have been populated,
+        use the available property to determine that.
+
+        :returns: True/False if session has been negotiated and connected.
         """
         return (
             self.connected
-            and self.supports_telemetry
             and self._shared_key is not None
             and self._iv is not None
-            and self._data is not None
+            and self._negotiation_timestamp is not None
         )
+
+    @property
+    def available(self) -> bool:
+        """Connected to device and data is available.
+
+        :returns: True/False if the device is connected and sending telemetry.
+        """
+        return self.negotiated and self._data is not None
 
     @property
     def address(self) -> str:
@@ -243,64 +279,12 @@ class SolixBLEDevice:
         return self._ble_device.name or DEFAULT_METADATA_STRING
 
     @property
-    def supports_telemetry(self) -> bool:
-        """Device supports the libraries telemetry standard.
-
-        :returns: True/False if telemetry supported.
-        """
-        return self._supports_telemetry
-
-    @property
     def last_update(self) -> datetime | None:
         """Timestamp of last telemetry data update from device.
 
         :returns: Timestamp of last update or None.
         """
         return self._last_data_timestamp
-
-    async def _determine_services(self) -> None:
-        """Determine GATT services available on the device."""
-
-        # Print services
-        for service in self._client.services:
-            _LOGGER.debug("[Service] %s", service)
-
-            for char in service.characteristics:
-                if "read" in char.properties:
-                    try:
-                        value = await self._client.read_gatt_char(char.uuid)
-                        extra = f", Value: {value}"
-                    except Exception as e:
-                        extra = f", Error: {e}"
-                else:
-                    extra = ""
-
-                _LOGGER.debug(
-                    "  [Characteristic] %s (%s)%s",
-                    char,
-                    ",".join(char.properties),
-                    extra,
-                )
-
-                for descriptor in char.descriptors:
-                    try:
-                        value = await self._client.read_gatt_descriptor(
-                            descriptor.handle
-                        )
-                        _LOGGER.debug(
-                            "    [Descriptor] %s, Value: %r", descriptor, value
-                        )
-                    except Exception as e:
-                        _LOGGER.debug("    [Descriptor] %s, Error: %s", descriptor, e)
-
-        # Populate supported services
-        self._supports_telemetry = bool(
-            self._client.services.get_characteristic(UUID_TELEMETRY)
-        )
-        if not self._supports_telemetry:
-            _LOGGER.warning(
-                f"Device '{self.name}' does not support the telemetry characteristic!"
-            )
 
     def _parse_int(
         self, key: str, begin: int = None, end: int = None, signed: bool = False
@@ -335,264 +319,691 @@ class SolixBLEDevice:
             else DEFAULT_METADATA_STRING
         )
 
-    def _parse_telemetry_bytes(self, data: bytearray) -> dict[str, bytes]:
-        """Parse a decrypted telemetry message bytes into parameters."""
+    def _split_packet(self, packet: bytes) -> tuple[bytes, bytes, bytes]:
+        """Validate packet and split into pattern, command, and payload bytes."""
+
+        packet_copy = bytearray(packet)
+
+        # Validate header is correct
+        packet_header = bytes([packet_copy.pop(0), packet_copy.pop(0)])
+        if packet_header != bytes.fromhex("ff09"):
+            raise ValueError("Packet does not start with FF09!")
+
+        # Validate encoded length is correct
+        packet_length = int.from_bytes(
+            bytes([packet_copy.pop(0), packet_copy.pop(0)]), byteorder="little"
+        )
+        if packet_length != len(packet):
+            raise ValueError(
+                f"Packet length is encoded as {packet_length} but its length was {len(packet)}!"
+            )
+
+        # Validate checksum is correct
+        packet_checksum = packet_copy.pop(-1).to_bytes()
+        if packet_checksum != self._checksum(packet[:-1]):
+            raise ValueError(
+                f"Packet checksum is encoded as {packet_checksum.hex()} but it is actually {self._checksum(packet[:-1]).hex()}!"
+            )
+
+        # Extract pattern
+        packet_pattern = bytes(
+            [packet_copy.pop(0), packet_copy.pop(0), packet_copy.pop(0)]
+        )
+
+        # Extract command
+        packet_cmd = bytes([packet_copy.pop(0), packet_copy.pop(0)])
+
+        # Telemetry packets have an extra field which must be popped
+        if packet_pattern.hex() == "03010f" and packet_cmd.hex() == "c402":
+            special_value = bytes([packet_copy.pop(0)])
+            _LOGGER.debug(f"Special value: {special_value.hex()}")
+
+        # Extract payload
+        packet_payload = bytes(packet_copy)
+
+        return packet_pattern, packet_cmd, packet_payload
+
+    def _parse_payload(self, payload: bytearray) -> dict[str, bytes]:
+        """Parse payload bytes into parameters."""
 
         parsed_data: dict[str, bytes] = {}
-        remaining_data = bytearray(data)
+        remaining_data = bytearray(payload)
+
+        # Packets sometimes start with 00 and we must strip that
+        if remaining_data.startswith(bytes.fromhex("00")):
+            remaining_data.pop(0)
+
         while len(remaining_data) != 0:
             try:
+                # Extract param id (e.g a1, a2, ...)
                 param_id = bytes([remaining_data.pop(0)]).hex()
+
+                # Sometimes there is just a param_id with no length or values
+                # and then padding after that. This has been observed during
+                # the optional stage 6 negotiation stage that only sometimes
+                # seems to happen with the C300X (~ 1/20 chance).
+                #
+                # If we have reached PKCS7 padding then we have
+                # reached the end of the payload
+                if len(remaining_data) < 16 and remaining_data == bytearray(
+                    len(remaining_data) * len(remaining_data).to_bytes(1)
+                ):
+                    parsed_data[param_id] = bytes()
+                    break
+
                 param_len = remaining_data.pop(0)
                 param_data = bytes([remaining_data.pop(0) for _ in range(0, param_len)])
                 parsed_data[param_id] = param_data
+
+                # If we have reached PKCS7 padding then we have
+                # reached the end of the payload
+                if len(remaining_data) < 16 and remaining_data == bytearray(
+                    len(remaining_data) * len(remaining_data).to_bytes(1)
+                ):
+                    break
+
             except IndexError:
                 _LOGGER.exception(
-                    "Unexpected end of packet! Data may be missing or invalid!"
+                    f"Unexpected end of packet! Data may be missing or invalid! Payload: '{payload.hex()}'"
                 )
 
         return parsed_data
 
-    def _parse_telemetry(self, data: bytearray) -> None:
-        """Update internal values using the telemetry data.
-
-        :param data: Bytes from status update message.
-        """
-        parsed_data = self._parse_telemetry_bytes(data)
-
-        # If debugging and we have a previous status update to compare against
-        if _LOGGER.isEnabledFor(logging.DEBUG) and self._data is not None:
-            if parsed_data == self._data:
-                _LOGGER.debug(f"No changes from previous status update")
-            else:
-                _LOGGER.debug(f"Changes detected compared to previous status update!")
-                differences = {
-                    k: {
-                        "bytes": f"{self._data[k]} -> {parsed_data[k]}",
-                        "hex": f"{self._data[k].hex()} -> {parsed_data[k].hex()}",
-                        "uint": f"{int.from_bytes(self._data[k][1:], byteorder="little")} -> {int.from_bytes(parsed_data[k][1:], byteorder="little")}",
-                        "int": f"{int.from_bytes(self._data[k][1:], byteorder="little", signed=True)} -> {int.from_bytes(parsed_data[k][1:], byteorder="little", signed=True)}",
-                    }
-                    for k in self._data.keys() & parsed_data.keys()
-                    if self._data[k] != parsed_data[k]
+    def _parameters_to_str(
+        self, parameters: dict[str, bytes], types: bool = False
+    ) -> str:
+        if types:
+            with_types = {
+                k: {
+                    "bytes": f"""{v}""",
+                    "hex": f"""{v.hex()}""",
+                    "uint": f"""{int.from_bytes(v[1:], byteorder="little")}""",
+                    "int": f"""{int.from_bytes(v[1:], byteorder="little", signed=True)}""",
                 }
-                _LOGGER.debug(
-                    f"Data changes: \n{json.dumps(differences, indent=4, sort_keys=True)}"
-                )
-
-        # Update internal data store
-        self._data = parsed_data
-        self._last_data_timestamp = datetime.now()
-
-    async def _process_telemetry_update(self, handle: int, data: bytearray) -> None:
-        """Update internal state and run callbacks"""
-
-        # Parse data
-        _LOGGER.debug(f"Received notification from '{self.name}'. Data: {data.hex()}")
-        self._number_of_received_packets = self._number_of_received_packets + 1
-
-        # If we do not have a shared key then we are still negotiating
-        if self._shared_key is None:
-            return await self._negotiate_encryption(data)
-
-        # If we are expecting a particular size and the data is not that size then the
-        # data we received is not the telemetry data we want
-        if (
-            self._EXPECTED_TELEMETRY_LENGTH != 0
-            and len(data) != self._EXPECTED_TELEMETRY_LENGTH
-        ):
-            _LOGGER.debug(
-                f"Data is not telemetry data. The size is wrong ({len(data)} != {self._EXPECTED_TELEMETRY_LENGTH}). Data: '{data.hex()}'"
-            )
-            return
-
-        if len(data) < 100:
-            _LOGGER.debug(
-                f"Data is not telemetry data. It is too small. We expect > 100 but got '{len(data)}'. Data: '{data.hex()}'"
-            )
-            return
-
-        _LOGGER.debug("Decrypting telemetry packet...")
-        data = self._decrypt_packet(data)
-        _LOGGER.debug(f"Decrypted telemetry packet str: {data}")
-        _LOGGER.debug(f"Decrypted telemetry packet hex: {data.hex()}")
-
-        old_data = self._data
-        self._parse_telemetry(data)
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            pretty_data = {
-                key: {
-                    "bytes": f"{value}",
-                    "hex": f"{value.hex()}",
-                    "uint": f"{int.from_bytes(value[1:], byteorder="little")}",
-                    "int": f"{int.from_bytes(value[1:], byteorder="little", signed=True)}",
-                }
-                for key, value in self._data.items()
+                for k, v in parameters.items()
             }
-            _LOGGER.debug(
-                f"Parsed telemetry packet: \n{json.dumps(pretty_data, indent=4, sort_keys=True)}"
-            )
-
-        # Print status update
-        _LOGGER.debug(self)
-
-        # Run callbacks if changed
-        if data != old_data:
-            self._run_state_changed_callbacks()
-
-    async def _negotiate_encryption(self, data: bytearray) -> None:
-        """Negotiate encryption with the device."""
-
-        if self._number_of_received_packets == 1:
-            _LOGGER.debug("Sending negotiation response 1...")
-            await self._client.write_gatt_char(
-                UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_1)
-            )
-        elif self._number_of_received_packets == 2:
-            _LOGGER.debug("Sending negotiation response 2...")
-            await self._client.write_gatt_char(
-                UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_2)
-            )
-        elif self._number_of_received_packets == 3:
-            _LOGGER.debug("Sending negotiation response 3...")
-            await self._client.write_gatt_char(
-                UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_3)
-            )
-        elif self._number_of_received_packets == 4:
-            _LOGGER.debug("Sending negotiation response 4...")
-            await self._client.write_gatt_char(
-                UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_4)
-            )
-
-        # This step is special. We can calculate the shared secret at this point
-        elif self._number_of_received_packets == 5:
-            _LOGGER.debug("Calculating shared secret...")
-
-            # The first half of the shared secret is the AES key
-            # and the second half is the IV
-            full_shared_secret = self._calculate_shared_secret(data)
-            self._shared_key = full_shared_secret[:16]
-            self._iv = full_shared_secret[16:]
-            _LOGGER.debug(f"AES key: {self._shared_key.hex()}")
-            _LOGGER.debug(f"AES IV: {self._iv.hex()}")
-            _LOGGER.debug("Sending negotiation response 5...")
-            await self._client.write_gatt_char(
-                UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_5)
-            )
-
+            return json.dumps(with_types, indent=4, sort_keys=True)
         else:
-            raise Exception("Negotiation failed!")
+            return str({k: v.hex() for k, v in parameters.items()})
 
-    def _calculate_shared_secret(self, data: bytes) -> bytes:
-        """Perform ECDH calculation to get shared secret."""
-
-        # Get public key of power station
-        device_public_key_bytes = bytes.fromhex("04") + data[12:-1]
-        _LOGGER.debug(f"Public key of power station: {device_public_key_bytes.hex()}")
-        power_station_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
-            ec.SECP256R1(), device_public_key_bytes
+    def _log_diff(self, old: dict[str, bytes], new: dict[str, bytes]) -> None:
+        """Log any differences between parameters."""
+        differences = {
+            k: {
+                "bytes": f"""{old[k]} -> {new[k]}""",
+                "hex": f"""{old[k].hex()} -> {new[k].hex()}""",
+                "uint": f"""{int.from_bytes(old[k][1:], byteorder="little")} -> {int.from_bytes(new[k][1:], byteorder="little")}""",
+                "int": f"""{int.from_bytes(old[k][1:], byteorder="little", signed=True)} -> {int.from_bytes(new[k][1:], byteorder="little", signed=True)}""",
+            }
+            for k in old.keys() & new.keys()
+            if new[k] != old[k]
+        }
+        _LOGGER.debug(
+            f"Parameter changes: \n{json.dumps(differences, indent=4, sort_keys=True)}"
         )
 
-        # Derive private key
-        private_value = int.from_bytes(bytes.fromhex(PRIVATE_KEY), byteorder="big")
-        private_key = ec.derive_private_key(private_value, ec.SECP256R1())
-
-        # Calculate shared secret, only the first half of it is used as the AES key
-        full_shared_secret = private_key.exchange(ec.ECDH(), power_station_public_key)
-        _LOGGER.debug(f"Full shared secret: {full_shared_secret.hex()}")
-        return full_shared_secret
-
-    def _decrypt_packet(self, data: bytes) -> bytes:
+    def _decrypt_payload(self, payload: bytes) -> bytes:
         """Decrypt telemetry packet using negotiated shared secret and IV."""
-        encrypted_payload = data[10:-3]
         cipher = AES.new(self._shared_key, AES.MODE_CBC, iv=self._iv)
-        return cipher.decrypt(encrypted_payload)
+        return cipher.decrypt(payload)
+
+    async def _process_telemetry(
+        self, cmd: bytes, parameters: dict[str, bytes]
+    ) -> None:
+        """Process telemetry data from the device."""
+
+        state_changed = self._data is None or parameters != self._data
+
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                f"Telemetry parameters: {self._parameters_to_str(parameters)}"
+            )
+
+            # Print state update if changes
+            if state_changed:
+
+                # If we have previous data to compare against log the diff
+                if self._data is not None:
+                    _LOGGER.debug("Parameters have changed since previous update!")
+                    self._log_diff(self._data, parameters)
+
+                # Else log the parameters but with the types
+                else:
+                    _LOGGER.debug(
+                        f"Telemetry parameters: {self._parameters_to_str(parameters, types=True)}"
+                    )
+
+        # Update internal parameters
+        self._data = parameters
+        self._last_data_timestamp = datetime.now()
+
+        # Run callbacks if state changed
+        if state_changed:
+
+            _LOGGER.debug(self)
+            self._run_state_changed_callbacks()
+
+    async def _process_notification(
+        self, client: BleakClient, handle: int, data: bytearray
+    ) -> None:
+        """Process a notification from the device."""
+
+        _LOGGER.debug(f"The client the notification is from is: {client}")
+
+        if self._client is not client:
+            _LOGGER.debug("Ignoring notification from old client")
+            return
+
+        # Split packet into pattern, command, and payload
+        _LOGGER.debug(
+            f"Received notification from '{self.name}'. length: {len(data)}, packet: '{data.hex()}'"
+        )
+        self._last_packet_timestamp = time.time()
+        pattern, cmd, payload = self._split_packet(data)
+        _LOGGER.debug(f"Pattern: {pattern.hex()}")
+        _LOGGER.debug(f"CMD: {cmd.hex()}")
+        _LOGGER.debug(f"Payload: {payload.hex()}")
+        _LOGGER.debug(f"Payload length: {len(payload)}")
+
+        # If the packet has a future registered then we just trigger that
+        # future instead of processing it here
+        if pattern + cmd in self._packet_futures:
+            _LOGGER.debug(
+                "Packet has future(s) registered. Triggering future(s) and ignoring packet..."
+            )
+            for future in self._packet_futures[pattern + cmd]:
+                future.set_result(payload)
+            return
+
+        # Match against common message types
+        match pattern.hex():
+
+            # Encryption negotiation
+            case "030001":
+                _LOGGER.debug("Received encryption negotiation message!")
+                return await self._process_negotiation(cmd, payload)
+
+            # Encrypted messages
+            case "03010f":
+
+                match cmd.hex():
+
+                    # Telemetry messages
+                    case "c402":
+                        _LOGGER.debug("Received telemetry message!")
+
+                        # Anker devices seem to split data across multiple
+                        # packets so we need to wait until we have both
+                        # packets before we can decrypt all of the data
+                        if len(payload) < 50:
+                            self._telemetry_payload_small = payload
+
+                        # If we receive a big packet it invalidates the
+                        # last small one since the big one comes before
+                        # the small one
+                        elif len(payload) > 230:
+                            self._telemetry_payload_large = payload
+                            self._telemetry_payload_small = None
+
+                        else:
+                            _LOGGER.warning(
+                                f"Telemetry payload has an unexpected length of {len(payload)}!"
+                            )
+
+                        if (
+                            self._telemetry_payload_small is None
+                            or self._telemetry_payload_large is None
+                        ):
+                            _LOGGER.debug("Missing other payload!")
+                            return
+
+                        new_payload = (
+                            self._telemetry_payload_large
+                            + self._telemetry_payload_small
+                        )
+
+                        # If we are accepting the new payload we invalidate
+                        # the partial payloads
+                        self._telemetry_payload_large = None
+                        self._telemetry_payload_small = None
+
+                        _LOGGER.debug(f"Merged payload: {new_payload.hex()}")
+                        decrypted_payload = self._decrypt_payload(new_payload)
+                        _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                        parameters = self._parse_payload(decrypted_payload)
+                        return await self._process_telemetry(cmd, parameters)
+
+                    # Unknown messages
+                    case _:
+                        _LOGGER.debug(f"Received unknown message of type: {cmd.hex()}")
+                        try:
+
+                            # If the payload is one byte too short try putting the
+                            # last byte of the cmd in front of it
+                            if len(payload) % 16 == 15:
+                                payload = cmd[1].to_bytes() + payload
+
+                            decrypted_payload = self._decrypt_payload(payload)
+                            _LOGGER.debug(
+                                f"Decrypted payload: {decrypted_payload.hex()}"
+                            )
+                            parameters = self._parse_payload(decrypted_payload)
+                            _LOGGER.debug(
+                                f"Parameters: {self._parameters_to_str(parameters, types=True)}"
+                            )
+                        except Exception:
+                            _LOGGER.exception(
+                                "Exception decrypting unknown message type"
+                            )
+
+            case _:
+                _LOGGER.warning(
+                    f"Unexpected packet type '{pattern}' sent by device! Packet: {data.hex()}"
+                )
+
+    async def _process_negotiation(self, cmd: bytes, payload: bytes) -> None:
+        """Negotiate encryption with the device."""
+
+        match cmd.hex():
+
+            # There is a "stage 0" in which we automatically send a negotiation
+            # request as soon as we establish the initial connection. That
+            # should lead to the power station sending a response landing us
+            # in stage 1.
+
+            # Negotiation stage 1
+            case "0801":
+                _LOGGER.debug(
+                    "Entered negotiation stage 1 due to response from device!"
+                )
+                parameters = self._parse_payload(payload)
+                _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
+                _LOGGER.debug("Sending stage 1 response message...")
+                return await self._client.write_gatt_char(
+                    UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_1)
+                )
+
+            # Negotiation stage 2
+            case "0803":
+                _LOGGER.debug(
+                    "Entered negotiation stage 2 due to response from device!"
+                )
+                parameters = self._parse_payload(payload)
+                _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
+                _LOGGER.debug("Sending stage 2 response message...")
+                return await self._client.write_gatt_char(
+                    UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_2)
+                )
+
+            # Negotiation stage 3
+            case "0829":
+                _LOGGER.debug(
+                    "Entered negotiation stage 3 due to response from device!"
+                )
+                parameters = self._parse_payload(payload)
+                _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
+                self._negotiation_timestamp = time.time()
+                _LOGGER.debug("Sending stage 3 response message...")
+                return await self._client.write_gatt_char(
+                    UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_3)
+                )
+
+            # Negotiation stage 4
+            case "0805":
+                _LOGGER.debug(
+                    "Entered negotiation stage 4 due to response from device!"
+                )
+                parameters = self._parse_payload(payload)
+                _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
+                _LOGGER.debug("Sending stage 4 response message...")
+                return await self._client.write_gatt_char(
+                    UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_4)
+                )
+
+            # Negotiation stage 5
+            case "0821":
+                _LOGGER.debug(
+                    "Entered negotiation stage 5 due to response from device!"
+                )
+                parameters = self._parse_payload(payload)
+                _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
+
+                # Extract public key of device from payload
+                device_public_key_bytes = bytes.fromhex("04") + parameters["a1"]
+                _LOGGER.debug(f"Public key of device: {device_public_key_bytes.hex()}")
+                device_public_key = EllipticCurvePublicKey.from_encoded_point(
+                    SECP256R1(), device_public_key_bytes
+                )
+
+                # Calculate the shared secret
+                # The first half of the shared secret is the encryption key
+                # and the second half is the IV
+                private_value = int.from_bytes(
+                    bytes.fromhex(PRIVATE_KEY), byteorder="big"
+                )
+                private_key = derive_private_key(private_value, SECP256R1())
+                shared_secret = private_key.exchange(ECDH(), device_public_key)
+                self._shared_key = shared_secret[:16]
+                self._iv = shared_secret[16:]
+                _LOGGER.debug(f"Shared secret: {shared_secret.hex()}")
+                _LOGGER.debug(f"AES key: {self._shared_key.hex()}")
+                _LOGGER.debug(f"AES IV: {self._iv.hex()}")
+
+                _LOGGER.debug("Sending stage 5 response message...")
+                return await self._client.write_gatt_char(
+                    UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_5)
+                )
+
+            # Negotiation stage 6 (Optional)
+            # Some devices (e.g C300X) sometimes send an extra message after
+            # stage 5 but others (e.g C1000) do not. No response is needed
+            # but it does not hurt to decrypt it anyway.
+            case "4822":
+                _LOGGER.debug(
+                    "Entered negotiation stage 6 (optional) due to response from device!"
+                )
+                decrypted_payload = self._decrypt_payload(payload)
+                parameters = self._parse_payload(decrypted_payload)
+                _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
+
+            case _:
+                _LOGGER.warning(
+                    f"Received unexpected negotiation request response from device! cmd: '{cmd}', parameters: '{self._parameters_to_str(parameters)}'"
+                )
+
+    def _checksum(self, packet: bytes) -> bytes:
+        """Calculate the checksum byte for a packet."""
+        checksum_value = 0
+        for b in packet:
+            checksum_value = checksum_value ^ b
+        return checksum_value.to_bytes(1)
+
+    async def _send_command(self, cmd: bytes, payload: bytes) -> None:
+        """Send a command to the device.
+
+        :param cmd: 2 bytes containing command type.
+        :param payload: Variable number of bytes containing arguments.
+        :raises ConnectionError: If not connected/negotiated to device.
+        """
+        if not self.negotiated:
+            raise ConnectionError("Not connected to device")
+
+        # Commands include a timestamp in the payload to prevent replay attacks
+        # and that timestamp is set during negotiations
+        time_passed = int(time.time() - self._negotiation_timestamp)
+        base_timestamp = int.from_bytes(
+            bytes.fromhex(BASE_TIMESTAMP), byteorder="little"
+        )
+        new_timestamp = (base_timestamp + time_passed).to_bytes(
+            length=4, byteorder="little"
+        )
+        new_payload = payload + bytes.fromhex("fe0503") + new_timestamp
+        await self._send_encrypted_packet(cmd, new_payload)
+
+    async def _send_encrypted_packet(self, cmd: bytes, payload: bytes) -> None:
+        """Send an encrypted packet using negotiated shared secret and IV."""
+        _LOGGER.debug(
+            f"Building packet with cmd: {cmd.hex()} and payload: {payload.hex()}"
+        )
+
+        # Pad payload
+        padder = PKCS7(128).padder()
+        padded_data = padder.update(payload)
+        padded_data += padder.finalize()
+
+        # Encrypt payload
+        cipher = AES.new(self._shared_key, AES.MODE_CBC, iv=self._iv)
+        encrypted_payload = cipher.encrypt(padded_data)
+
+        # Calculate length of message
+        length = 2 + 2 + 3 + 2 + len(encrypted_payload) + 1
+        length_bytes = length.to_bytes(length=2, byteorder="little")
+
+        # Build packet
+        packet = (
+            bytes.fromhex("ff09")
+            + length_bytes
+            + bytes.fromhex("03000f")
+            + cmd
+            + encrypted_payload
+        )
+        packet = packet + self._checksum(packet)
+        _LOGGER.debug(f"Sending encrypted packet: {packet.hex()}")
+
+        # Send packet
+        await self._client.write_gatt_char(UUID_COMMAND, packet)
+
+    def _register_future(
+        self, future: asyncio.Future, pattern: bytes, cmd: bytes
+    ) -> None:
+        """Register a future to be triggered when the pattern and cmd bytes are received."""
+
+        # If there are no futures registered for these bytes then we need to
+        # create the list
+        if pattern + cmd not in self._packet_futures:
+            self._packet_futures[pattern + cmd] = [future]
+
+        # Else we add our future to the futures for these bytes
+        else:
+            self._packet_futures[pattern + cmd].append(future)
+
+    def _deregister_future(
+        self, future: asyncio.Future, pattern: bytes, cmd: bytes
+    ) -> None:
+        """Deregister a future to be triggered when the pattern and cmd bytes are received."""
+
+        # If there are no futures registered for these bytes we do nothing
+        if pattern + cmd not in self._packet_futures:
+            return
+
+        # If the future is not set for these bytes we do nothing
+        if future not in self._packet_futures.get(pattern + cmd):
+            return
+
+        # Otherwise remove the future from the list of futures for these bytes
+        self._packet_futures.get(pattern + cmd).remove(future)
+
+        # If there are no futures left for these bytes then remove the key
+        if len(self._packet_futures.get(pattern + cmd)) == 0:
+            self._packet_futures.pop(pattern + cmd)
+
+    async def _listen_for_packet(
+        self, pattern: bytes, cmd: bytes, timeout: int = 10
+    ) -> bytes | None:
+        """Wait for a response and return its payload bytes.
+
+        Use this to listen for a response to a command and get the payload
+        returned. This will block until a matching packet is received or
+        the timeout is reached.
+
+        Note that this will override any built in parsing of the
+        packet (i.e if you listen for a regular telemetry packet that packet
+        will not be used to automatically populate device attributes).
+
+        :param pattern: 3 byte pattern (e.g 03010f).
+        :param cmd: 2 byte command (e.g c402).
+        :param timeout: Maximum time to wait for matching response.
+        :returns: Payload bytes if response found else None.
+        """
+        future = asyncio.Future()
+        try:
+            self._register_future(future, pattern, cmd)
+            return await asyncio.wait_for(future, timeout)
+        except asyncio.CancelledError:
+            return None
+        finally:
+            self._deregister_future(future, pattern, cmd)
 
     def _run_state_changed_callbacks(self) -> None:
         """Execute all registered callbacks for a state change."""
         for function in self._state_changed_callbacks:
-            function()
+            try:
+                function()
+            except Exception:
+                _LOGGER.exception(
+                    f"Exception raised by a registered state change callback '{function}'!"
+                )
 
-    async def _subscribe_to_services(self) -> None:
-        """Subscribe to state updates from device."""
-        if self._supports_telemetry:
+    async def _auto_reconnect(self) -> None:
+        """Task designed to be run in background to automatically reconnect.
 
-            # Subscribe to service which device uses to send us data
-            await self._client.start_notify(
-                UUID_TELEMETRY, self._process_telemetry_update
+        This task is executed automatically when a successful connection
+        is made and while the connection attempt limit is not exceeded it
+        will attempt to re-connect when a disconnect event is signalled.
+
+        This background task is cancelled when disconnect is called.
+        """
+
+        def _can_retry() -> bool:
+            return (
+                self._connection_attempts < RECONNECT_ATTEMPTS_MAX
+                or RECONNECT_ATTEMPTS_MAX == -1
             )
-            _LOGGER.debug(f"Subscribed to notifications from device '{self.name}'!")
-        else:
-            _LOGGER.warning(
-                f"Device '{self.name}' does not support telemetry characteristic!"
-            )
 
-    async def _reconnect(self) -> None:
-        """Re-connect to device and run state change callbacks on timeout/failure."""
-        _LOGGER.debug(f"Attempting to re-connect to '{self.name}'!")
         try:
-            async with asyncio.timeout(DISCONNECT_TIMEOUT):
-                await self.disconnect()
-                await asyncio.sleep(RECONNECT_DELAY)
-                await self.connect(run_callbacks=False)
-                if self.available:
-                    _LOGGER.debug(f"Successfully re-connected to '{self.name}'!")
-                else:
-                    _LOGGER.warning(f"Failed to re-connect to '{self.name}'!")
 
-        except TimeoutError:
-            _LOGGER.exception(f"Timed out attempting to re-connect to '{self.name}'!")
-            self._run_state_changed_callbacks()
+            # If callbacks need to be run on reconnection, we silently
+            # reconnect if the timeout has not been exceeded, else we
+            # run callbacks to let subscribers know we were disconnected
+            run_callbacks_on_reconnect = False
+
+            while _can_retry():
+
+                # If we are already connected and negotiated then wait for disconnection
+                if self.negotiated:
+                    _LOGGER.debug(
+                        f"Automatic reconnect task ready and waiting for disconnect event from '{self.name}'!"
+                    )
+                    await self._disconnect_event.wait()
+                    _LOGGER.debug(
+                        f"Disconnection event signalled by '{self.name}', starting reconnection..."
+                    )
+                else:
+                    _LOGGER.debug(
+                        f"We are still not connected to '{self.name}', starting reconnection..."
+                    )
+
+                # If we have reached this stage we are not connected
+
+                try:
+                    # Limit on amount of time we can stay disconnected before
+                    # we have to trigger callbacks to let subscribers know we
+                    # are disconnected
+                    async with asyncio.timeout(DISCONNECT_TIMEOUT):
+
+                        while _can_retry():
+
+                            await asyncio.sleep(RECONNECT_DELAY)
+
+                            try:
+                                attempt_number = self._connection_attempts
+                                if await self.connect(
+                                    run_callbacks=run_callbacks_on_reconnect
+                                ):
+                                    _LOGGER.debug(
+                                        f"""Successfully reconnected to '{self.name}' {"silently" if not run_callbacks_on_reconnect else ""} on attempt {attempt_number}!"""
+                                    )
+
+                                    # Reset back to false on successful connection
+                                    run_callbacks_on_reconnect = False
+
+                                    # Break out of this loop back to loop waiting for disconnect event
+                                    break
+                            except Exception:
+                                _LOGGER.exception(
+                                    f"""Exception raised attempting to {"silently" if not run_callbacks_on_reconnect else ""} reconnect to '{self.name}'!"""
+                                )
+
+                # If timeout exceeded
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        f"Timed out attempting to silently reconnect to '{self.name}', callbacks will be triggered due to disconnect!"
+                    )
+                    self._reset_session(reset_data=True)
+                    self._run_state_changed_callbacks()
+
+                    # If we ran callbacks due to a disconnect we will
+                    # need to run them again on reconnect
+                    run_callbacks_on_reconnect = True
+
+            else:
+                _LOGGER.warning("Maximum reconnect limit exceeded!")
+
+        except asyncio.CancelledError:
+            _LOGGER.debug("Automatic reconnect task has been canceled/stopped")
+
+        except Exception:
+            _LOGGER.exception("Unexpected exception in automatic reconnect task!")
 
     def _disconnect_callback(self, client: BaseBleakClient) -> None:
-        """Re-connect on unexpected disconnect and run callbacks on failure.
+        """Callback executed by bleak when the connection is lost.
 
-        This function will re-connect if this is not an expected
-        disconnect and if it fails to re-connect it will run
-        state changed callbacks. If the re-connect is successful then
-        no callbacks are executed.
+        This clears the negotiated values which are now invalid
+        and will need to be re-negotiated. This does not clear the
+        cached properties of the device, that will only be cleared
+        if the re-connection fails. This also triggers the
+        disconnection event which will result in the automatic
+        reconnection task attempting to reconnect.
 
         :param client: Bleak client.
         """
 
         # Ignore disconnect callbacks from old clients
-        if client != self._client:
+        if client is not self._client:
             _LOGGER.debug(
                 f"Disconnect of '{self.name}' came from other client. Ignoring..."
             )
             return
 
-        # Reset internal state
-        self._supports_telemetry = False
-        self._number_of_received_packets = 0
+        _LOGGER.debug(f"Connection lost to '{self.name}'!")
+
+        # Reset session specific state variables but keep the cached data
+        self._reset_session(reset_data=False)
+
+        # Trigger disconnection event
+        self._disconnect_event.set()
+
+    def _reset_session(self, reset_data: bool = True):
+        """Reset negotiated variables and data and futures."""
+
+        if reset_data:
+            self._data = None
+            self._last_data_timestamp = None
+
+        self._telemetry_payload_small = None
+        self._telemetry_payload_large = None
         self._shared_key = None
         self._iv = None
-
-        # If we expected the disconnect then we don't try to reconnect.
-        if self._expect_disconnect:
-            _LOGGER.debug(f"Received expected disconnect from '{client}'.")
-            return
-
-        # Else we did not expect the disconnect and must re-connect if
-        # there are attempts remaining
-        _LOGGER.info(f"Unexpected disconnect from '{client}'!")
-        if (
-            RECONNECT_ATTEMPTS_MAX == -1
-            or self._connection_attempts < RECONNECT_ATTEMPTS_MAX
-        ):
-            # Try and reconnect
-            self._reconnect_task = asyncio.create_task(self._reconnect())
-
-        else:
-            _LOGGER.warning(
-                f"Maximum re-connect attempts to '{client}' exceeded. Auto re-connect disabled!"
-            )
+        self._last_packet_timestamp = None
+        self._negotiation_timestamp = None
+        self._packet_futures: dict[bytes, list[asyncio.Future]] = {}
 
     def __str__(self) -> str:
-        """Return string representation of device state."""
+        """Return string representation of device state.
+
+        If any of the values fail to parse the error type will be
+        placed instead of the value.
+
+        Example: C300(
+          AC_OUTPUT: PortStatus.NOT_CONNECTED,
+          AC_POWER_IN: 0,
+          AC_OUTPUT: ValueError: 1280 is not a valid PortStatus,
+          ...
+        )
+        """
+
+        def _safe_get(name: str, prop: property) -> str:
+            try:
+                return prop.fget(self)
+            except Exception as e:
+                _LOGGER.exception(
+                    f"Failed to parse property '{name}' when stringifying class! Is there an undocumented state?"
+                )
+                return f"{type(e).__name__}: {e}"
+
         self_str = f"{self.__class__.__name__}(\n"
         for name, value in {
-            prop_name.upper(): prop.fget(self)
+            prop_name.upper(): _safe_get(prop_name, prop)
             for prop_name, prop in inspect.getmembers(type(self))
             if isinstance(prop, property)
         }.items():

@@ -12,16 +12,17 @@ Welcome to SolixBLE's documentation!
     :target: https://github.com/psf/black
     :alt: Black
 
-Unofficial Python module for monitoring Anker Solix power stations and other devices
+Unofficial Python module for monitoring and controlling Anker Solix power stations
+and other devices
 
  - 👌 Free software: MIT license
  - 🍝 Sauce: https://github.com/flip-dots/SolixBLE
  - 📦 PIP: https://pypi.org/project/SolixBLE/
 
-This Python module enables you to monitor Anker Solix devices directly
-from your computer, without the need for any cloud services or Anker app.
+This Python module enables you to monitor and control (some) Anker Solix devices
+directly from your computer, without the need for any cloud services or Anker app.
 It leverages the Bleak library to interact with Bluetooth Anker devices.
-No pairing is required in order to receive telemetry data.
+No pairing is required in order to receive telemetry data or control the device.
 
 
 .. note::
@@ -42,18 +43,27 @@ Battery health          ❌        ✅           ✅       ✅         ✅      
 Temperature             ✅        ✅          ✅        ✅         ✅           ✅
 Total Power In          ✅        ✅          ✅        ❌         ❌           ✅     
 Total Power Out         ✅        ✅          ✅        ✅         ❌           ✅ 
+AC on/off control       ✅        N/A         ✅        ❌         ❌           ❌  
 AC Power in             ✅        N/A         ✅        ✅         ✅           ✅     
 AC Power out            ✅        N/A         ✅        ✅         ✅           ✅  
 AC on/off state         ✅        N/A         ✅        ✅         ❌           ✅   
 AC Timer                ✅        N/A         ✅        ❌         ❌           ❌  
+DC on/off control       ✅        ❌          ✅        ❌         ❌           ❌  
 DC Power in             ✅        ✅          ✅        ✅         ✅           ✅   
 DC Power out            ✅        ✅          ❌        ✅         ✅           ✅  
-DC Power in status      ✅        ✅          ✅        ✅         ❌           ❌ 
+DC Power in status      ✅        ✅          ❌        ✅         ❌           ❌ 
 DC Power out status     ✅        ❌          ❌        ✅         ❌           ✅   
 DC Timer                ✅        ❌          ❌        ❌         ❌           ❌ 
 USB Power out           ✅        ✅          ✅        ✅         ✅           ✅     
 USB Port status         ✅        ✅          ❌        ✅         ❌           ✅ 
+Light control           ✅        ❌          ✅        ❌         ❌           ❌  
 Light status            ✅        ✅          ❌        N/A        ❌           ❌ 
+Display on/off control  ✅        ❌          ✅        ❌         ❌           ❌ 
+Display on/off status   ❌        ❌          ❌        ❌         ❌           ❌ 
+Display brightness ctrl ✅        ❌          ✅        ❌         ❌           ❌ 
+Display brightness stat ❌        ✅          ❌        ❌         ❌           ❌ 
+Display timeout ctrl    ✅        ❌          ✅        ❌         ❌           ❌ 
+Display timeout stat    ❌        ✅          ❌        ❌         ❌           ❌
 Firmware version        ✅        ❌          ✅        ❌         ✅           ✅  
 Serial number           ✅        ❌          ✅        ✅         ✅           ✅     
 Expansion temperature   N/A       N/A         ✅        N/A       ✅           ❌  
@@ -61,6 +71,7 @@ Expansion percentage    N/A       N/A         ✅        N/A       ✅          
 Expansion health        N/A       N/A         ✅        N/A       ✅           ❌    
 Expansion firmware      N/A       N/A         ✅        N/A       ✅           ✅     
 Expansion num           N/A       N/A         ✅        N/A       ✅           ❌ 
+Polled status updates   ✅        ❌          ✅        ❌         ❌           ❌ 
 ======================= ======== ========== ========= ========= ============ ======
 
 

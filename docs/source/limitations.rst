@@ -12,15 +12,13 @@ connection back on by pressing the connection button causes it to disconnect fro
 It may be possible to send a special command to the power station to use both at the same time, but this has not been experimented with.
 
 
-Control
--------
+Bluetooth connection
+--------------------
 
-.. note::
-    It is not currently possible to control devices, only receive telemetry.
-    
-This functionality may be added in future, and work done by the `anker-solix-api <https://github.com/thomluther/anker-solix-api>`_
-project has decoded the format used by many devices and the Bluetooth and Cloud APIs use the same format.
-This is not currently being worked on though.
+It has been observed that some devices (e.g C300) will stop advertising if they are not connected
+for a significant period of time, this means the device will be undiscoverable and it will not be, 
+possible to connect to it. This behavior has been observed even with the connection light blinking.
+The solution to this issue (as it often is with software issues) is to turn the device off then on again.
 
 
 Device support

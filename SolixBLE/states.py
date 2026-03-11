@@ -13,14 +13,24 @@ class PortStatus(Enum):
     #: The status of the port is unknown.
     UNKNOWN = -1
 
-    #: The port is not connected.
+    #: The port is not connected / off.
     NOT_CONNECTED = 0
 
-    #: The port is an output.
+    #: The port is an output / on.
     OUTPUT = 1
 
-    #: The port is an input.
+    #: The port is an input / on.
     INPUT = 2
+
+    @classmethod
+    def from_input_only(cls, value: int):
+        """Custom factory for ports which only support being inputs."""
+
+        # If it would be an output (i.e 1) set it to input (i.e 2).
+        if value == PortStatus.OUTPUT:
+            value = PortStatus.INPUT
+
+        return cls(value)
 
 
 class ChargingStatus(Enum):
@@ -94,3 +104,28 @@ class LightStatus(Enum):
 
     #: The light is on high.
     HIGH = 3
+
+    #: SOS mode. Not supported by all devices.
+    SOS = 4
+
+
+class DisplayTimeout(Enum):
+    """Display timeout on device in seconds. Only specific values are allowed."""
+
+    #: The status of the display timeout is unknown.
+    UNKNOWN = -1
+
+    #: 20 seconds.
+    S20 = 20
+
+    #: 30 seconds.
+    S30 = 30
+
+    #: 60 seconds.
+    S60 = 60
+
+    #: 300 seconds (5m).
+    S300 = 300
+
+    #: 1800 seconds (30m).
+    S1800 = 1800

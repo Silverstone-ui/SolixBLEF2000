@@ -3,23 +3,24 @@
 [![PyPI Status](https://img.shields.io/pypi/v/SolixBLE.svg)](https://pypi.python.org/pypi/SolixBLE)
 [![Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Python module for monitoring Anker Solix power stations and other devices over Bluetooth.
+Python module for monitoring and controlling Anker Solix power stations and other devices over Bluetooth.
  - 👌 Free software: MIT license
  - 🍝 Sauce: https://github.com/flip-dots/SolixBLE
  - 🖨️ Documentation: https://solixble.readthedocs.io/en/latest/
  - 📦 PIP: https://pypi.org/project/SolixBLE/
 
 
-This Python module enables you to monitor Anker Solix devices directly
-from your computer, without the need for any cloud services or Anker app.
+This Python module enables you to monitor and control (some) Anker Solix
+devices directly from your computer, without the need for any cloud services or Anker app.
 It leverages the Bleak library to interact with Bluetooth Anker Solix devices.
-No pairing is required in order to receive telemetry data.
+No pairing is required in order to receive telemetry data or control the device.
 
 
 ## Features
 
 - 🔋 Battery percentage
 - ⚡ Total Power In/Out
+- 🎛️ AC/DC output control
 - 🔌 AC Power In/Out
 - 🚗 DC Power In/Out
 - ⏰ AC/DC Timer value
@@ -31,7 +32,8 @@ No pairing is required in order to receive telemetry data.
 - 🩺 Battery health
 - 🌡️ Battery temperature
 - ↔️ Expansion batteries (Charge, Temperature, Health, Firmware)
-- 💡 Light bar status
+- 💡 Light bar status & control
+- 🖥️ Display status & control
 - 🔂 Simple structure
 - ✔️ More emojis than strictly necessary
 
@@ -67,7 +69,7 @@ See the [support table](https://solixble.readthedocs.io/en/latest) in the docume
 - 🏢 Windows
   - Windows 10 
 - 💾 Mac OSX
-  - Maybe?
+  - 15.7
 
 
 ## Installation
@@ -80,16 +82,8 @@ pip install SolixBLE
 ```
 
 
-### Manual
-
-SolixBLE consists of a single file (SolixBLE.py) which you can simply put in the
-same directory as your program. If you are using manual installation make sure
-the dependencies are installed as well.
-
-```
-pip install bleak bleak-retry-connector cryptography pycryptodome
-```
-
 ## Adding support for new devices
 
-See the `Generic` class inside `SolixBLE.py` for guidance on how to add support for new devices.
+See the `Generic` class inside `SolixBLE/devices/generic.py` and the 
+[documentation](https://solixble.readthedocs.io/en/latest/new_devices.html)
+for guidance on how to add support for new devices.

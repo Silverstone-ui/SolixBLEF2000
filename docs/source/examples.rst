@@ -4,16 +4,30 @@ Examples
 
 .. _basic_example:
 
-Basic Example
--------------
+Monitoring Example
+------------------
 
 Simple demonstration of connecting to a known device and printing
 out telemetry updates.
 
-
-.. literalinclude:: ../../examples/example.py
+.. literalinclude:: ../../examples/monitor.py
     :language: python
     :linenos:
+
+
+
+.. _control_example:
+
+Control Example
+---------------
+
+Simple demonstration of connecting to a known device and sending
+commands to control its outputs.
+
+.. literalinclude:: ../../examples/control.py
+    :language: python
+    :linenos:
+
 
 
 .. _complex_example:
@@ -29,3 +43,4 @@ for new devices, see :doc:`new_devices`.
 .. literalinclude:: ../../examples/demo.py
     :language: python
     :linenos:
+

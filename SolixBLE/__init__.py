@@ -21,6 +21,7 @@ from .states import (
     ChargingStatus,
     ChargingStatusC300DC,
     ChargingStatusF3800,
+    DisplayTimeout,
     LightStatus,
     PortStatus,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "ChargingStatus",
     "ChargingStatusC300DC",
     "ChargingStatusF3800",
+    "DisplayTimeout",
     "LightStatus",
     "PortStatus",
     "discover_devices",

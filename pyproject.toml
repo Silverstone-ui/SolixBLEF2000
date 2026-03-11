@@ -1,6 +1,6 @@
 [project]
 name = "SolixBLE"
-version = "3.2.0"
+version = "3.3.0"
 dependencies = [
   "bleak>=0.19.0",
   "cryptography",
@@ -11,7 +11,7 @@ requires-python = ">= 3.11"
 authors = [
   { name="Harvey Lelliott", email="harveylelliott@duck.com" },
 ]
-description = "Python module for monitoring Bluetooth Anker Solix devices"
+description = "Python module for monitoring & controlling Bluetooth Anker Solix devices"
 readme = "README.md"
 license = {file = "LICENSE.txt"}
 keywords = ["Anker", "Solix", "BLE", "Home Assistant"]

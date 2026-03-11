@@ -88,16 +88,15 @@ class C1000G2(SolixBLEDevice):
         return self._parse_int("a6", begin=3, end=5)
 
     @property
-    def ac_on(self) -> bool:
-        """Is the AC output on.
+    def ac_output(self) -> PortStatus:
+        """AC Port Status.
 
-        :returns: AC output on or default bool value.
+        PortStatus.NOT_CONNECTED signifies off.
+        PortStatus.OUTPUT signifies on.
+
+        :returns: Status of the AC port.
         """
-        return (
-            bool(self._parse_int("a7", begin=1, end=2))
-            if self._data is not None
-            else DEFAULT_METADATA_BOOL
-        )
+        return PortStatus(self._parse_int("a7", begin=1, end=2))
 
     @property
     def ac_power_out(self) -> int:
@@ -108,22 +107,18 @@ class C1000G2(SolixBLEDevice):
         return self._parse_int("a7", begin=2, end=4)
 
     @property
-    def dc_input_on(self) -> bool:
-        """Is DC input on.
+    def solar_port(self) -> PortStatus:
+        """Solar Port Status.
 
-        :returns: DC input on or default bool value.
+        :returns: Status of the solar port.
         """
-        return (
-            bool(self._parse_int("a8", begin=1, end=2))
-            if self._data is not None
-            else DEFAULT_METADATA_BOOL
-        )
+        return PortStatus.from_input_only(self._parse_int("a8", begin=1, end=2))
 
     @property
-    def dc_power_in(self) -> int:
-        """DC Power In.
+    def solar_power_in(self) -> int:
+        """Solar/DC Power In.
 
-        :returns: DC power in or default int value.
+        :returns: Solar/DC power in or default int value.
         """
         return self._parse_int("a8", begin=2)
 
@@ -192,10 +187,10 @@ class C1000G2(SolixBLEDevice):
         return self._parse_int("ae", begin=2)
 
     @property
-    def dc_port(self) -> PortStatus:
+    def dc_output(self) -> PortStatus:
         """DC Port Status.
 
-        :returns: Status of the DC port.
+        :returns: Status of the DC output port.
         """
         return PortStatus(self._parse_int("b2", begin=1, end=2))
 

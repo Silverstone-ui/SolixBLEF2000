@@ -7,7 +7,6 @@
 from datetime import datetime, timedelta
 
 from ..const import (
-    DEFAULT_METADATA_BOOL,
     DEFAULT_METADATA_FLOAT,
     DEFAULT_METADATA_INT,
     DEFAULT_METADATA_STRING,
@@ -147,7 +146,7 @@ class F3800(SolixBLEDevice):
         return self._parse_int("ab", begin=1)
 
     @property
-    def dc_port(self) -> PortStatus:
+    def dc_output(self) -> PortStatus:
         """DC Port Status.
 
         :returns: Status of the DC port.
@@ -235,16 +234,15 @@ class F3800(SolixBLEDevice):
         return ".".join([digit for digit in str(self._parse_int("ba", begin=1))])
 
     @property
-    def ac_on(self) -> bool:
-        """Is the AC output on.
+    def ac_output(self) -> PortStatus:
+        """AC Port Status.
 
-        :returns: AC output on or default bool value.
+        PortStatus.NOT_CONNECTED signifies off.
+        PortStatus.OUTPUT signifies on.
+
+        :returns: Status of the AC port.
         """
-        return (
-            bool(self._parse_int("bc", begin=1))
-            if self._data is not None
-            else DEFAULT_METADATA_BOOL
-        )
+        return PortStatus(self._parse_int("bc", begin=1))
 
     @property
     def charging_status(self) -> ChargingStatusF3800:
