@@ -232,15 +232,6 @@ class C1000(SolixBLEDevice):
         """
         return PortStatus(self._parse_int("bb", begin=1))
 
-    # TODO: Fix bc is not solar port status. It shows as output when AC charging
-    # @property
-    # def solar_port(self) -> PortStatus:
-    #     """Solar Port Status.
-
-    #     :returns: Status of the solar port.
-    #     """
-    #     return PortStatus.from_input_only(self._parse_int("bc", begin=1))
-
     @property
     def temperature(self) -> int:
         """Temperature of the unit (C).
@@ -304,18 +295,6 @@ class C1000(SolixBLEDevice):
         :returns: Device serial number or default str value.
         """
         return self._parse_string("d0", begin=1)
-
-    # TODO: D8 does not exist. Need to figure out what is DC output
-    # @property
-    # def dc_output(self) -> PortStatus:
-    #     """DC Port Status.
-
-    #     PortStatus.NOT_CONNECTED signifies off.
-    #     PortStatus.OUTPUT signifies on.
-
-    #     :returns: Status of the DC port.
-    #     """
-    #     return PortStatus(self._parse_int("d8", begin=1))
 
     async def turn_ac_on(self) -> None:
         """Turn the AC output on.
