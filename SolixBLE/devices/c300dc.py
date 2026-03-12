@@ -361,3 +361,15 @@ class C300DC(SolixBLEDevice):
             if self._data is not None
             else DEFAULT_METADATA_BOOL
         )
+
+    @property
+    def dc_12v_auto_on(self) -> bool:
+        """Configured DC Port Auto On.
+
+        :returns: Status of the DC auto on mode.
+        """
+        return (
+            bool(self._parse_int("f7", begin=1))
+            if self._data is not None
+            else DEFAULT_METADATA_BOOL
+        )
