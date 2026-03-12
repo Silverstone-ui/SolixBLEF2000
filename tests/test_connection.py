@@ -153,3 +153,59 @@ async def test_automatic_retry_timeout():
         # successful reconnection after running callbacks due to
         # disconnection
         assert num_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_disconnect(fast_timeouts, fast_sleep):
+    """
+    Test the mock device is disconnected and no automatic
+    reconnection attempts are executed when disconnect is called.
+
+    We also expect no callbacks to be run and multiple calls
+    to disconnect to do nothing.
+    """
+
+    async with MockDevice() as mock_bluetooth:
+
+        device = SolixBLEDevice(MOCK_BLE_DEVICE)
+
+        async def assert_still_disconnected():
+            """Assert that device is still disconnected."""
+            for i in range(0, 100):
+                await asyncio.sleep(1)
+                assert (
+                    not device.connected
+                ), f"Expected connected to be False after {i} seconds"
+                assert (
+                    not device.negotiated
+                ), f"Expected negotiated to be False after {i} seconds"
+
+        def my_callback(*args, **kwargs):
+            """We expect this to not be called."""
+            assert False
+
+        # We first expect a negotiation
+        for expected, response in NEGOTIATION_RESPONSES.items():
+            mock_bluetooth.expect_ordered(
+                bytes.fromhex(expected),
+                bytes.fromhex(response) if response is not None else None,
+            )
+
+        # We expect the negotiations to succeed
+        assert await device.connect(), "Expected connect to return True"
+        await asyncio.sleep(5)
+        assert device.connected, "Expected connected to be True"
+        assert device.negotiated, "Expected negotiated to be True"
+        mock_bluetooth.check_assertions()
+
+        # We then add our callback that should not be run when we call
+        # disconnect
+        device.add_callback(my_callback)
+
+        # We then call disconnect and expect to remain disconnected
+        await device.disconnect()
+        await assert_still_disconnected()
+
+        # We call disconnect again and expect no changes (still disconnected)
+        await device.disconnect()
+        await assert_still_disconnected()
