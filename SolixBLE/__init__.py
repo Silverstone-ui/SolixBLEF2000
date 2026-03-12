@@ -8,6 +8,7 @@ from .device import SolixBLEDevice
 from .devices import (
     C300,
     C300DC,
+    C800,
     C1000,
     C1000G2,
     F2000,
@@ -31,6 +32,7 @@ __all__ = [
     "SolixBLEDevice",
     "C300",
     "C300DC",
+    "C800",
     "C1000",
     "C1000G2",
     "F2000",

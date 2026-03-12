@@ -14,6 +14,7 @@ the list of properties for that class.
 
    c300
    c300dc
+   c800
    c1000
    c1000g2
    f2000

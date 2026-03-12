@@ -44,6 +44,7 @@ See the [support table](https://solixble.readthedocs.io/en/latest) in the docume
 
 - C300(X)
 - C300(X) DC
+- C800(X)
 - C1000(X)
 - C1000 Gen 2
 - F2000 (767 PowerHouse)
@@ -51,7 +52,7 @@ See the [support table](https://solixble.readthedocs.io/en/latest) in the docume
 - Solarbank 2
 - Solarbank 3
 - Prime Charger 250w
-- Maybe more? IDK
+- Potentially more!
 
 
 ## Requirements
