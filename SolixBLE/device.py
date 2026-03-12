@@ -17,7 +17,7 @@ from bleak import BleakClient, BleakError
 from bleak.backends.client import BaseBleakClient
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
-from Crypto.Cipher import AES
+from Cryptodome.Cipher import AES
 from cryptography.hazmat.primitives.asymmetric.ec import (
     ECDH,
     SECP256R1,
