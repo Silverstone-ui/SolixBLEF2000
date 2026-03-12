@@ -109,16 +109,7 @@ class SolixBLEDevice:
 
             # If we have an old client get rid of it
             if self._client is not None:
-                _LOGGER.debug(
-                    f"Disposing of old client '{self._client}' in order to connect to '{self.name}'!"
-                )
-                try:
-                    await self._client.disconnect()
-                except Exception:
-                    _LOGGER.exception(
-                        "Exception raised when disposing of old client to make new one!"
-                    )
-                self._client = None
+                await self._dispose_of_client()
 
             # Reset negotiated details but keep any data
             self._reset_session(reset_data=False)
@@ -225,11 +216,7 @@ class SolixBLEDevice:
 
         # If there is a client disconnect and throw it away
         if self._client is not None:
-            try:
-                await self._client.disconnect()
-            except Exception:
-                _LOGGER.exception("Exception raised when disposing of old client!")
-            self._client = None
+            await self._dispose_of_client()
 
         # Reset session
         self._connection_attempts = 0
@@ -972,7 +959,18 @@ class SolixBLEDevice:
         # Trigger disconnection event
         self._disconnect_event.set()
 
-    def _reset_session(self, reset_data: bool = True):
+    async def _dispose_of_client(self) -> None:
+        """Dispose of current bleak client."""
+        client = self._client
+        self._client = None
+        try:
+            await client.disconnect()
+        except Exception:
+            _LOGGER.exception(
+                f"Exception raised when disposing of bleak client '{client}'!"
+            )
+
+    def _reset_session(self, reset_data: bool = True) -> None:
         """Reset negotiated variables and data and futures."""
 
         if reset_data:
