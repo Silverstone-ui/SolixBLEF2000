@@ -16,6 +16,7 @@ from bleak import BLEDevice
 from SolixBLE import (
     C300,
     C300DC,
+    C800,
     C1000,
     C1000G2,
     F2000,
@@ -31,6 +32,7 @@ from SolixBLE import (
 MODELS = {
     "C300": C300,
     "C300DC": C300DC,
+    "C800": C800,
     "C1000": C1000,
     "C1000 G2": C1000G2,
     "F2000 (767 PowerHouse)": F2000,

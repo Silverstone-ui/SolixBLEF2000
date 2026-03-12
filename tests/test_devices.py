@@ -15,6 +15,7 @@ from helpers import NEGOTIATION_RESPONSES, MockDevice
 
 from SolixBLE import (
     C300,
+    C800,
     C1000,
     C1000G2,
     ChargingStatus,
@@ -33,6 +34,36 @@ MOCK_BLE_DEVICE = BLEDevice(MOCK_DEVICE_ADDRESS, MOCK_DEVICE_NAME, {})
 @pytest.mark.parametrize(
     "device_class,payload,mapping",
     [
+        # The C800(X) uses the same mappings as the C1000(X) minus the expansion
+        # battery stuff. This uses the test data for the C1000(X) as I do not
+        # have data for a C800(X).
+        pytest.param(
+            C800,
+            "a10131a2050300000000a3050300000000a403026b06a503020000a603020000a703020000a803020000a903020000aa03020000ab03020000ac03020000ad03020000ae03020000af03020000b003020100b103020000b203020000b30302a600b403020000b503020000b60302ff01b703020000b803029a00b903020000ba0302a600bb03020000bc020100bd020117be020100bf020101c0020100c1020157c2020100c3020164c4020100c5020100c6020100c7020100c8020100c9020100ca020100cb020100cc020100cd020100ce020100cf020100d0110041504339464530453237333030323735e5020100",
+            {
+                "ac_timer_remaining": 0,
+                "ac_timer": None,
+                "hours_remaining": 20.3,
+                "days_remaining": 6,
+                "ac_power_in": 0,
+                "ac_power_out": 0,
+                "usb_c1_power": 0,
+                "usb_c2_power": 0,
+                "usb_a1_power": 0,
+                "usb_a2_power": 0,
+                "solar_power_in": 0,
+                "power_in": 0,
+                "power_out": 1,
+                "software_version": "1.6.6",
+                "ac_output": PortStatus.NOT_CONNECTED,
+                # "solar_port": PortStatus.NOT_CONNECTED,
+                "temperature": 23,
+                "battery_percentage": 87,
+                "battery_health": 100,
+                "serial_number": "APC9FE0E27300275",
+            },
+            id="c800_basic",
+        ),
         pytest.param(
             C1000,
             "a10131a2050300000000a3050300000000a403026b06a503020000a603020000a703020000a803020000a903020000aa03020000ab03020000ac03020000ad03020000ae03020000af03020000b003020100b103020000b203020000b30302a600b403020000b503020000b60302ff01b703020000b803029a00b903020000ba0302a600bb03020000bc020100bd020117be020100bf020101c0020100c1020157c2020100c3020164c4020100c5020100c6020100c7020100c8020100c9020100ca020100cb020100cc020100cd020100ce020100cf020100d0110041504339464530453237333030323735e5020100",
