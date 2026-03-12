@@ -108,11 +108,16 @@ class SolixBLEDevice:
         try:
 
             # If we have an old client get rid of it
-            if self._client is not None and self._client.is_connected:
+            if self._client is not None:
                 _LOGGER.debug(
                     f"Disposing of old client '{self._client}' in order to connect to '{self.name}'!"
                 )
-                await self._client.disconnect()
+                try:
+                    await self._client.disconnect()
+                except Exception:
+                    _LOGGER.exception(
+                        "Exception raised when disposing of old client to make new one!"
+                    )
                 self._client = None
 
             # Reset negotiated details but keep any data
@@ -218,13 +223,17 @@ class SolixBLEDevice:
         if self._auto_reconnect_task is not None:
             self._auto_reconnect_task.cancel()
 
+        # If there is a client disconnect and throw it away
+        if self._client is not None:
+            try:
+                await self._client.disconnect()
+            except Exception:
+                _LOGGER.exception("Exception raised when disposing of old client!")
+            self._client = None
+
+        # Reset session
         self._connection_attempts = 0
         self._reset_session()
-
-        # If there is a client disconnect and throw it away
-        if self._client:
-            await self._client.disconnect()
-            self._client = None
 
     @property
     def connected(self) -> bool:
