@@ -36,6 +36,18 @@ class C300DC(SolixBLEDevice):
         return self._parse_int("a2", begin=1)
 
     @property
+    def timestamp_dc_output(self) -> datetime | None:
+        """Timestamp of when DC output is switched off.
+
+        :returns: Timestamp of when DC output is switched off or None.
+        """
+        if (
+            self.dc_output_timeout != DEFAULT_METADATA_INT
+            and self.dc_output_timeout != 0
+        ):
+            return datetime.now() + timedelta(seconds=self.dc_output_timeout)
+
+    @property
     def hours_remaining(self) -> float:
         """Time remaining to full/empty.
 
