@@ -187,8 +187,9 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 1 due to response from device!"
                 )
-                payload = self._decrypt_negotiation_payload(payload)
-                parameters = self._parse_payload(payload)
+                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 _LOGGER.debug("Sending stage 1 response message...")
                 return await self._client.write_gatt_char(
@@ -201,8 +202,9 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 2 due to response from device!"
                 )
-                payload = self._decrypt_negotiation_payload(payload)
-                parameters = self._parse_payload(payload)
+                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 _LOGGER.debug("Sending stage 2 response message...")
                 return await self._client.write_gatt_char(
@@ -215,8 +217,9 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 3 due to response from device!"
                 )
-                payload = self._decrypt_negotiation_payload(payload)
-                parameters = self._parse_payload(payload)
+                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 _LOGGER.debug("Sending stage 3 response message...")
                 return await self._client.write_gatt_char(
@@ -229,8 +232,9 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 4 due to response from device!"
                 )
-                payload = self._decrypt_negotiation_payload(payload)
-                parameters = self._parse_payload(payload)
+                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
                 _LOGGER.debug("Sending stage 4 response message...")
                 return await self._client.write_gatt_char(
@@ -243,8 +247,9 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 5 due to response from device!"
                 )
-                payload = self._decrypt_negotiation_payload(payload)
-                parameters = self._parse_payload(payload)
+                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
 
                 # Extract public key of device from payload
@@ -290,8 +295,9 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 6 due to response from device!"
                 )
-                payload = self._decrypt_payload(payload)
-                parameters = self._parse_payload(payload)
+                decrypted_payload = self._decrypt_payload(payload)
+                _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
 
                 _LOGGER.debug("Sending stage 6 response message...")
@@ -313,8 +319,9 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 7 due to response from device!"
                 )
-                payload = self._decrypt_payload(payload)
-                parameters = self._parse_payload(payload)
+                decrypted_payload = self._decrypt_payload(payload)
+                _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
+                parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
 
                 _LOGGER.debug("Sending stage 7 response messages...")
