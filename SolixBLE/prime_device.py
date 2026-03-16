@@ -283,6 +283,7 @@ class PrimeDevice(SolixBLEDevice):
                     cmd=bytes.fromhex(NEGOTIATION_COMMAND_5_CMD),
                     payload=new_payload,
                 )
+                _LOGGER.debug(f"Built stage 5 response packet: {new_packet.hex()}")
                 return await self._client.write_gatt_char(
                     UUID_COMMAND,
                     new_packet,
@@ -309,6 +310,7 @@ class PrimeDevice(SolixBLEDevice):
                     cmd=bytes.fromhex(NEGOTIATION_COMMAND_6_CMD),
                     payload=new_payload,
                 )
+                _LOGGER.debug(f"Built stage 6 response packet: {new_packet.hex()}")
                 return await self._client.write_gatt_char(
                     UUID_COMMAND,
                     new_packet,
@@ -335,6 +337,7 @@ class PrimeDevice(SolixBLEDevice):
                     cmd=bytes.fromhex(NEGOTIATION_COMMAND_7_CMD),
                     payload=new_payload_a,
                 )
+                _LOGGER.debug(f"Built stage 7a response packet: {new_packet_a.hex()}")
                 await self._client.write_gatt_char(
                     UUID_COMMAND,
                     new_packet_a,
@@ -349,6 +352,7 @@ class PrimeDevice(SolixBLEDevice):
                     cmd=bytes.fromhex(NEGOTIATION_COMMAND_8_CMD),
                     payload=new_payload_b,
                 )
+                _LOGGER.debug(f"Built stage 7b response packet: {new_packet_b.hex()}")
                 await self._client.write_gatt_char(
                     UUID_COMMAND,
                     new_packet_b,
