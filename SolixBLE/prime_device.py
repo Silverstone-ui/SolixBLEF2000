@@ -100,20 +100,6 @@ class PrimeDevice(SolixBLEDevice):
     # Encryption / Decryption #
     ###########################
 
-    def _decrypt_negotiation_payload(self, payload: bytes) -> bytes:
-        """
-        Decrypt the payload of a negotiation message.
-
-        Anker Prime devices encrypt the negotiation payloads using static keys.
-        This is only used for negotiation.
-        """
-        cipher = AES.new(
-            bytes.fromhex(NEGOTIATION_KEY),
-            AES.MODE_GCM,
-            nonce=bytes.fromhex(NEGOTIATION_NONCE),
-        )
-        return cipher.decrypt(payload)
-
     def _encrypt_payload(self, payload: bytes) -> bytes:
         """
         Encrypt the payload of a session message (e.g telemetry, commands, etc).
@@ -131,7 +117,10 @@ class PrimeDevice(SolixBLEDevice):
 
     def _decrypt_payload(self, payload: bytes) -> bytes:
         """
-        Decrypt the payload of a session message (e.g telemetry, commands, etc).
+        Decrypt the payload of a message (e.g telemetry, commands, etc).
+
+        If the shared secret has not been established then the static
+        negotiation key and nonce will be used.
 
         Anker Prime devices use AES GCM with the first 16 bytes of the shared
         secret as the AES key and next 12 bytes as the nonce. The last 16 bytes
@@ -140,20 +129,29 @@ class PrimeDevice(SolixBLEDevice):
         """
         mac = payload[-16:]
         encrypted_payload = payload[:-16]
-        cipher = AES.new(
-            self._shared_secret[:16], AES.MODE_GCM, nonce=self._shared_secret[16:28]
+        key = (
+            self._shared_secret[:16]
+            if self._shared_secret is not None
+            else bytes.fromhex(NEGOTIATION_KEY)
         )
-        cipher.update(bytes.fromhex(AAD))
+        nonce = (
+            self._shared_secret[16:28]
+            if self._shared_secret is not None
+            else bytes.fromhex(NEGOTIATION_NONCE)
+        )
 
+        # Try to decrypt and verify data
         try:
+            cipher = AES.new(key, AES.MODE_GCM, nonce)
+            cipher.update(bytes.fromhex(AAD))
             return cipher.decrypt_and_verify(encrypted_payload, mac)
+
+        # If validation fails decrypt anyway
         except ValueError:
             _LOGGER.exception(
                 "Failed to validate authenticity of payload, decoding anyway..."
             )
-            cipher = AES.new(
-                self._shared_secret[:16], AES.MODE_GCM, nonce=self._shared_secret[16:28]
-            )
+            cipher = AES.new(key, AES.MODE_GCM, nonce)
             return cipher.decrypt(encrypted_payload)
 
     ###############
@@ -187,7 +185,7 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 1 due to response from device!"
                 )
-                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                decrypted_payload = self._decrypt_payload(payload)
                 _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
                 parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
@@ -202,7 +200,7 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 2 due to response from device!"
                 )
-                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                decrypted_payload = self._decrypt_payload(payload)
                 _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
                 parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
@@ -217,7 +215,7 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 3 due to response from device!"
                 )
-                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                decrypted_payload = self._decrypt_payload(payload)
                 _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
                 parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
@@ -232,7 +230,7 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 4 due to response from device!"
                 )
-                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                decrypted_payload = self._decrypt_payload(payload)
                 _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
                 parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
@@ -247,7 +245,7 @@ class PrimeDevice(SolixBLEDevice):
                 _LOGGER.debug(
                     "Entered negotiation stage 5 due to response from device!"
                 )
-                decrypted_payload = self._decrypt_negotiation_payload(payload)
+                decrypted_payload = self._decrypt_payload(payload)
                 _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
                 parameters = self._parse_payload(decrypted_payload)
                 _LOGGER.debug(f"Parameters: {self._parameters_to_str(parameters)}")
