@@ -67,16 +67,6 @@ NEGOTIATION_RESPONSES_PRIME: dict[str, list[str]] = {
 
 
 @dataclass
-class ExpectedNegotiation:
-
-    shared_secret: bytes
-
-    private_key: str
-
-    requests: list[RequestResponse]
-
-
-@dataclass
 class RequestResponse:
     """
     Internal data class used by MockDevice to keep track of which
