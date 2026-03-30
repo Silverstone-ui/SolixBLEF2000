@@ -169,16 +169,16 @@ class PrimeDevice(SolixBLEDevice):
         Send the negotiation initiation command.
         """
 
-        # Log parameters we will send
-        # TODO: Remove after debugging complete!
-        new_parameters = self._parse_payload(
-            self._decrypt_payload(
-                self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_0))[2]
+        # Log parameters we will send if debugging (makes handshake easier to see in logs)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            new_parameters = self._parse_payload(
+                self._decrypt_payload(
+                    self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_0))[2]
+                )
             )
-        )
-        _LOGGER.debug(
-            f"Stage 0 message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-        )
+            _LOGGER.debug(
+                f"Stage 0 message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+            )
 
         await self._client.write_gatt_char(
             UUID_COMMAND, bytes.fromhex(NEGOTIATION_COMMAND_0)
@@ -210,16 +210,16 @@ class PrimeDevice(SolixBLEDevice):
                     f"Parameters: {self._parameters_to_str(parameters, types=True)}"
                 )
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    self._decrypt_payload(
-                        self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_1))[2]
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        self._decrypt_payload(
+                            self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_1))[2]
+                        )
                     )
-                )
-                _LOGGER.debug(
-                    f"Stage 1 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                    _LOGGER.debug(
+                        f"Stage 1 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 _LOGGER.debug("Sending stage 1 response message...")
                 return await self._client.write_gatt_char(
@@ -239,16 +239,16 @@ class PrimeDevice(SolixBLEDevice):
                     f"Parameters: {self._parameters_to_str(parameters, types=True)}"
                 )
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    self._decrypt_payload(
-                        self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_2))[2]
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        self._decrypt_payload(
+                            self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_2))[2]
+                        )
                     )
-                )
-                _LOGGER.debug(
-                    f"Stage 2 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                    _LOGGER.debug(
+                        f"Stage 2 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 _LOGGER.debug("Sending stage 2 response message...")
                 return await self._client.write_gatt_char(
@@ -268,16 +268,16 @@ class PrimeDevice(SolixBLEDevice):
                     f"Parameters: {self._parameters_to_str(parameters, types=True)}"
                 )
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    self._decrypt_payload(
-                        self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_3))[2]
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        self._decrypt_payload(
+                            self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_3))[2]
+                        )
                     )
-                )
-                _LOGGER.debug(
-                    f"Stage 3 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                    _LOGGER.debug(
+                        f"Stage 3 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 _LOGGER.debug("Sending stage 3 response message...")
                 return await self._client.write_gatt_char(
@@ -297,16 +297,16 @@ class PrimeDevice(SolixBLEDevice):
                     f"Parameters: {self._parameters_to_str(parameters, types=True)}"
                 )
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    self._decrypt_payload(
-                        self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_4))[2]
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        self._decrypt_payload(
+                            self._split_packet(bytes.fromhex(NEGOTIATION_COMMAND_4))[2]
+                        )
                     )
-                )
-                _LOGGER.debug(
-                    f"Stage 4 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                    _LOGGER.debug(
+                        f"Stage 4 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 _LOGGER.debug("Sending stage 4 response message...")
                 return await self._client.write_gatt_char(
@@ -352,14 +352,14 @@ class PrimeDevice(SolixBLEDevice):
                 # pre-defined ones.
                 _LOGGER.debug("Sending stage 5 response message...")
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    bytes.fromhex(NEGOTIATION_COMMAND_5_PAYLOAD)
-                )
-                _LOGGER.debug(
-                    f"Stage 5 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        bytes.fromhex(NEGOTIATION_COMMAND_5_PAYLOAD)
+                    )
+                    _LOGGER.debug(
+                        f"Stage 5 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 new_payload = self._encrypt_payload(
                     bytes.fromhex(NEGOTIATION_COMMAND_5_PAYLOAD)
@@ -391,14 +391,14 @@ class PrimeDevice(SolixBLEDevice):
 
                 _LOGGER.debug("Sending stage 6 response message...")
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    bytes.fromhex(NEGOTIATION_COMMAND_6_PAYLOAD)
-                )
-                _LOGGER.debug(
-                    f"Stage 6 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        bytes.fromhex(NEGOTIATION_COMMAND_6_PAYLOAD)
+                    )
+                    _LOGGER.debug(
+                        f"Stage 6 response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 new_payload = self._encrypt_payload(
                     bytes.fromhex(NEGOTIATION_COMMAND_6_PAYLOAD)
@@ -443,14 +443,14 @@ class PrimeDevice(SolixBLEDevice):
                     new_packet_a,
                 )
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    bytes.fromhex(NEGOTIATION_COMMAND_7_PAYLOAD)
-                )
-                _LOGGER.debug(
-                    f"Stage 7a response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        bytes.fromhex(NEGOTIATION_COMMAND_7_PAYLOAD)
+                    )
+                    _LOGGER.debug(
+                        f"Stage 7a response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 # Packet B
                 new_payload_b = self._encrypt_payload(
@@ -467,14 +467,14 @@ class PrimeDevice(SolixBLEDevice):
                     new_packet_b,
                 )
 
-                # Log parameters we will send
-                # TODO: Remove after debugging complete!
-                new_parameters = self._parse_payload(
-                    bytes.fromhex(NEGOTIATION_COMMAND_8_PAYLOAD)
-                )
-                _LOGGER.debug(
-                    f"Stage 7b response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
-                )
+                # Log parameters we will send if debugging (makes handshake easier to see in logs)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    new_parameters = self._parse_payload(
+                        bytes.fromhex(NEGOTIATION_COMMAND_8_PAYLOAD)
+                    )
+                    _LOGGER.debug(
+                        f"Stage 7b response message parameters: {self._parameters_to_str(new_parameters, types=True)}"
+                    )
 
                 return
 
