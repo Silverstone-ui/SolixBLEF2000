@@ -357,7 +357,7 @@ class SolixBLEDevice:
 
         return packet_pattern, packet_cmd, packet_payload
 
-    def _parse_payload(self, payload: bytearray) -> dict[str, bytes]:
+    def _parse_payload(self, payload: bytearray | bytes) -> dict[str, bytes]:
         """
         Parse payload bytes into parameters.
 
