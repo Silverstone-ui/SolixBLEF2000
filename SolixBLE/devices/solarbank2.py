@@ -4,8 +4,9 @@
 
 """
 
-from ..const import DEFAULT_METADATA_FLOAT, DEFAULT_METADATA_STRING
+from ..const import DEFAULT_METADATA_BOOL, DEFAULT_METADATA_FLOAT, DEFAULT_METADATA_STRING
 from ..device import SolixBLEDevice
+from ..states import GridStatus, LightMode, TemperatureUnit
 
 
 class Solarbank2(SolixBLEDevice):
@@ -301,3 +302,109 @@ class Solarbank2(SolixBLEDevice):
             return DEFAULT_METADATA_FLOAT
 
         return self._parse_int("d3", begin=1) / 10.0
+
+    @property
+    def error_code(self) -> int:
+        """Device error code.
+
+        :returns: Error code or default int value.
+        """
+        return self._parse_int("a5", begin=1)
+
+    @property
+    def temperature_unit(self) -> TemperatureUnit:
+        """Temperature unit setting.
+
+        :returns: Temperature unit (Celsius or Fahrenheit).
+        """
+        return TemperatureUnit(self._parse_int("a9", begin=1))
+
+    @property
+    def output_cutoff_data(self) -> int:
+        """Output cutoff data.
+
+        :returns: Output cutoff data or default int value.
+        """
+        return self._parse_int("b4", begin=1)
+
+    @property
+    def lowpower_input_data(self) -> int:
+        """Low power input data.
+
+        :returns: Low power input data or default int value.
+        """
+        return self._parse_int("b5", begin=1)
+
+    @property
+    def input_cutoff_data(self) -> int:
+        """Input cutoff data.
+
+        :returns: Input cutoff data or default int value.
+        """
+        return self._parse_int("b6", begin=1)
+
+    @property
+    def max_load(self) -> int:
+        """Maximum load in watts.
+
+        :returns: Maximum load in watts or default int value.
+        """
+        return self._parse_int("c2", begin=1)
+
+    @property
+    def usage_mode(self) -> int:
+        """Usage mode.
+
+        :returns: Usage mode or default int value.
+        """
+        return self._parse_int("c6", begin=1)
+
+    @property
+    def home_load_preset(self) -> int:
+        """Home load preset in watts.
+
+        :returns: Home load preset in watts or default int value.
+        """
+        return self._parse_int("c7", begin=1)
+
+    @property
+    def light_mode(self) -> LightMode:
+        """Light mode. Normal or Mood.
+
+        :returns: Light mode.
+        """
+        return LightMode(self._parse_int("d2", begin=1))
+
+    @property
+    def grid_status(self) -> GridStatus:
+        """Grid connection status.
+
+        :returns: Grid status.
+        """
+        return GridStatus(self._parse_int("e0", begin=1))
+
+    @property
+    def light_on(self) -> bool | None:
+        """Whether the light is switched on.
+        Original value is inverted because it is called "light_off_switch"
+
+        :returns: True if light is on, False if off.
+        """
+        return (
+            not bool(self._parse_int("e1", begin=1))
+            if self._data is not None
+            else DEFAULT_METADATA_BOOL
+        )
+
+    @property
+    def battery_heating(self) -> bool | None:
+        """Whether the battery is currently heating.
+
+        :returns: True if heating, False if not heating.
+        """
+        return (
+            bool(self._parse_int("e8", begin=1))
+            if self._data is not None
+            else DEFAULT_METADATA_BOOL
+        )
+

@@ -90,6 +90,19 @@ class LightStatus(Enum):
     SOS = 4
 
 
+class LightMode(Enum):
+    """The light mode of the device."""
+
+    #: The light mode is unknown.
+    UNKNOWN = -1
+
+    #: Normal light mode.
+    NORMAL = 0
+
+    #: Mood light mode.
+    MOOD = 1
+
+
 class DisplayTimeout(Enum):
     """Display timeout on device in seconds. Only specific values are allowed."""
 
@@ -122,6 +135,27 @@ class TemperatureUnit(Enum):
 
     #: Display unit is Fahrenheit.
     FAHRENHEIT = 1
+
+class GridStatus(Enum):
+    """The grid connection status."""
+
+    #: The grid status is unknown.
+    UNKNOWN = -1
+
+    #: Grid is connected and OK.
+    OK = 1
+
+    #: Undocumented in API, but device operates as expected and
+    #: outputs power to grid. Maybe a pure "dispense" state because
+    #: SB2 can't draw power from the grid
+    OK_AS_WELL_I_GUESS = 2
+
+    #: Grid is connecting.
+    CONNECTING = 3
+
+    #: No grid connection.
+    NO_GRID = 6
+
 
 class PortOverload(Enum):
     """The overload status of a port."""
