@@ -118,7 +118,7 @@ Usage mode                          ✅           ❌
 Presets                             ❌           ❌
 Light mode                          ✅           ❌
 PV limitations                      ❌           ❌
-PV panel stats                      ✅           ❌
+PV panel power                      ✅           ❌
 AC limitations                      ❌           ❌
 Software version                    ✅           ❌  
 Software version controller         ✅           ❌
