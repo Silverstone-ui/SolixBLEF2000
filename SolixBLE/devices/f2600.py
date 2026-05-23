@@ -68,7 +68,7 @@ class F2600(F2000):
         return PortStatus(self._parse_int("cb", begin=1))
 
     @property
-    def usb_c1(self) -> PortStatus:
+    def usb_port_c1(self) -> PortStatus:
         """USB C1 Port Status.
 
         :returns: Status of the USB C1 port.
@@ -76,7 +76,7 @@ class F2600(F2000):
         return PortStatus(self._parse_int("c6", begin=1))
 
     @property
-    def usb_c2(self) -> PortStatus:
+    def usb_port_c2(self) -> PortStatus:
         """USB C2 Port Status.
 
         :returns: Status of the USB C2 port.
@@ -84,7 +84,7 @@ class F2600(F2000):
         return PortStatus(self._parse_int("c7", begin=1))
 
     @property
-    def usb_c3(self) -> PortStatus:
+    def usb_port_c3(self) -> PortStatus:
         """USB C3 Port Status.
 
         :returns: Status of the USB C3 port.
@@ -92,7 +92,7 @@ class F2600(F2000):
         return PortStatus(self._parse_int("c8", begin=1))
 
     @property
-    def usb_a1(self) -> PortStatus:
+    def usb_port_a1(self) -> PortStatus:
         """USB A1 Port Status.
 
         :returns: Status of the USB A1 port.
@@ -100,7 +100,7 @@ class F2600(F2000):
         return PortStatus(self._parse_int("c9", begin=1))
 
     @property
-    def usb_a2(self) -> PortStatus:
+    def usb_port_a2(self) -> PortStatus:
         """USB A2 Port Status.
 
         :returns: Status of the USB A2 port.
