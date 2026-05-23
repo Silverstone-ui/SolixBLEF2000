@@ -38,6 +38,7 @@ class F2600(F2000):
     F2600 Power Station.
 
     Use this class to connect and monitor a F2600 power station.
+    This model is also known as the A1781.
     """
 
     _EXPECTED_TELEMETRY_LENGTH: int = 253
