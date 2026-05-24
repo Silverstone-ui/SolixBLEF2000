@@ -48,6 +48,7 @@ See the [support table](https://solixble.readthedocs.io/en/latest) in the docume
 - C1000(X)
 - C1000 Gen 2
 - F2000 (767 PowerHouse)
+- F2600
 - F3800
 - Solarbank 2
 - Solarbank 3
