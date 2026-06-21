@@ -158,6 +158,7 @@ class C1000G2(SolixBLEDevice):
         PortStatus.OUTPUT signifies on.
 
         .. note::
+           :collapsible: closed
 
            The AC port status is the first byte of the ``a7`` parameter,
            mirroring the ``04 <status> <watts LE>`` per-port shape used by the
