@@ -34,6 +34,14 @@ class PrimePowerBank20k(PrimeDevice):
         return self._parse_int("a6", begin=2, end=4) / 10.0
 
     @property
+    def temperature(self) -> int:
+        """Temperature of the unit (C).
+
+        :returns: Temperature of the unit in degrees C.
+        """
+        return self._parse_int("af", begin=1, signed=True)
+
+    @property
     def usb_port_c1(self) -> PortStatus:
         """USB C1 Port Status.
 
