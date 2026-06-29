@@ -16,6 +16,7 @@ from .devices import (
     Generic,
     PrimeCharger160w,
     PrimeCharger250w,
+    PrimePowerBank20k,
     Solarbank2,
     Solarbank3,
 )
@@ -25,9 +26,9 @@ from .states import (
     ChargingStatusF3800,
     DisplayTimeout,
     LightStatus,
+    PortOverload,
     PortStatus,
     TemperatureUnit,
-    PortOverload,
 )
 from .utilities import discover_devices
 
@@ -45,6 +46,7 @@ __all__ = [
     "Solarbank3",
     "PrimeCharger160w",
     "PrimeCharger250w",
+    "PrimePowerBank20k",
     "Generic",
     "ChargingStatus",
     "ChargingStatusF3800",

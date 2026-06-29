@@ -24,6 +24,7 @@ from SolixBLE import (
     Generic,
     PrimeCharger160w,
     PrimeCharger250w,
+    PrimePowerBank20k,
     Solarbank2,
     Solarbank3,
     SolixBLEDevice,
@@ -42,6 +43,7 @@ MODELS = {
     "Solarbank 3": Solarbank3,
     "PrimeCharger160w": PrimeCharger160w,
     "PrimeCharger250w": PrimeCharger250w,
+    "Prime Power Bank 20k/220w": PrimePowerBank20k,
     "Unknown": Generic,
 }
 
