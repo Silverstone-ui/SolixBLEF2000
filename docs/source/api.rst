@@ -18,6 +18,7 @@ the list of properties for that class.
    c1000
    c1000g2
    f2000
+   f2600
    f3800
    solarbank2
    solarbank3
