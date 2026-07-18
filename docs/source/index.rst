@@ -191,4 +191,5 @@ Contents
    new_devices
    app_decoding
    f2000_hardware_variant
+   f2000_alt
    source

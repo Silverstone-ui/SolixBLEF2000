@@ -3,8 +3,9 @@ F2000 (767 PowerHouse)
 
 .. note::
     Some 767 PowerHouse units use a different, unencrypted BLE protocol that this class does
-    not implement — if ``connect()`` fails with a ``BleakCharacteristicNotFoundError``, see
-    :doc:`f2000_hardware_variant`.
+    not implement — if ``connect()`` fails with a ``BleakCharacteristicNotFoundError``, use
+    :class:`~SolixBLE.F2000Alt` instead. See :doc:`f2000_hardware_variant` for how to tell
+    which one you have.
 
 .. autoclass:: SolixBLE.F2000
    :members: 

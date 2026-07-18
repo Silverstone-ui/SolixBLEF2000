@@ -223,7 +223,15 @@ Known unknowns
 Reference implementation
 --------------------------
 
-A working, standalone (not yet integrated into the :class:`~SolixBLE.F2000` class) decoder
-implementing everything in this document is in ``examples/test_f2000.py`` in the project
-repository, along with ``examples/live_telemetry.py`` (minimal raw poll/print) and
-``examples/monitor_recharge.py`` (continuous polling loop with charge-complete detection).
+:class:`~SolixBLE.F2000Alt` (see :doc:`f2000_alt`) is a proper library device class
+implementing everything in this document, following the same public interface
+(``connect()``, ``disconnect()``, properties, callbacks) as :class:`~SolixBLE.F2000` and the
+rest of the library - verified working end to end against real hardware, including
+``discover_devices()`` finding the device (it required adding a second identifier UUID,
+:data:`SolixBLE.const.UUID_IDENTIFIER_F2000_ALT`, since this variant doesn't advertise the
+UUID the library normally scans for).
+
+The example scripts used to originally reverse-engineer and prototype this protocol are
+still in ``examples/`` for reference: ``test_f2000.py``, ``live_telemetry.py`` (minimal raw
+poll/print), and ``monitor_recharge.py`` (continuous polling loop with charge-complete
+detection) - but ``F2000Alt`` is the one to actually build on.

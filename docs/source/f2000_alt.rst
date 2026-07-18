@@ -1,0 +1,18 @@
+F2000 (767 PowerHouse) - alternate hardware variant
+=====================================================
+
+.. note::
+    See :doc:`f2000_hardware_variant` for the full protocol write-up, byte-level
+    field map, and how to tell whether your unit needs this class instead of
+    :class:`~SolixBLE.F2000`.
+
+.. note::
+    Read-only. Control (turning outputs on/off, changing settings) is not yet
+    implemented for this variant.
+
+.. autoclass:: SolixBLE.F2000Alt
+   :members:
+   :inherited-members: connect, disconnect, add_callback, remove_callback, connected, available, address, name, last_update
+   :special-members: __init__
+   :member-order: groupwise
+   :no-index:
