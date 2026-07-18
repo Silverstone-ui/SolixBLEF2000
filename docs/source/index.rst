@@ -190,4 +190,5 @@ Contents
    limitations
    new_devices
    app_decoding
+   f2000_hardware_variant
    source

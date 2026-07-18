@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>767 PowerHouse — Live</title>
+<style>
+  :root {
+    --bg: #12161b;
+    --surface: #1a2027;
+    --surface-2: #212933;
+    --surface-3: #262f3a;
+    --border: #2c3540;
+    --text: #e6e9ed;
+    --text-dim: #8a94a3;
+    --text-faint: #5c6675;
+    --accent: #e8934a;
+    --accent-wash: rgba(232, 147, 74, 0.12);
+    --ok: #4fb286;
+    --ok-wash: rgba(79, 178, 134, 0.13);
+    --warn: #d9a441;
+    --warn-wash: rgba(217, 164, 65, 0.13);
+    --off: #5b6472;
+    --off-wash: rgba(91, 100, 114, 0.16);
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Roboto Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f3ee; --surface: #ffffff; --surface-2: #efece4; --surface-3: #e6e2d7;
+      --border: #d9d4c7; --text: #1d2126; --text-dim: #676d76; --text-faint: #9aa0a8;
+      --accent: #c06a1e; --accent-wash: rgba(192, 106, 30, 0.10);
+      --ok: #24805c; --ok-wash: rgba(36, 128, 92, 0.10);
+      --warn: #9c6f10; --warn-wash: rgba(156, 111, 16, 0.12);
+      --off: #767c85; --off-wash: rgba(118, 124, 133, 0.13);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    font-size: 15px; margin: 0; padding: 24px 16px 60px;
+  }
+
+  .page { max-width: 880px; margin: 0 auto; }
+
+  header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    flex-wrap: wrap; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--border);
+  }
+
+  .title-block .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 6px;
+  }
+  h1 { font-family: var(--mono); font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-dim); font-size: 13px; font-family: var(--mono); }
+
+  .conn-status {
+    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12.5px;
+    color: var(--text-dim); padding: 8px 12px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); flex-shrink: 0; }
+  .dot.live { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(79,178,134,0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(79,178,134,0); }
+    100% { box-shadow: 0 0 0 0 rgba(79,178,134,0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .dot.live { animation: none; } }
+
+  .hero {
+    display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center;
+    margin: 28px 0; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  }
+
+  .ring-wrap { position: relative; width: 128px; height: 128px; }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--surface-3); stroke-width: 10; }
+  .ring-fg { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+  .ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring-label .pct { font-family: var(--mono); font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ring-label .lbl { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .hero-stat .num { font-family: var(--mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hero-stat .lbl { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .hero-stat .num.accent { color: var(--accent); }
+
+  .sparkline { grid-column: 1 / -1; }
+  .sparkline canvas { width: 100%; height: 48px; display: block; }
+  .sparkline .lbl { font-size: 11px; color: var(--text-faint); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+
+  @media (max-width: 560px) {
+    .hero { grid-template-columns: 1fr; }
+    .ring-wrap { margin: 0 auto; }
+    .hero-stats { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    header { flex-direction: column; }
+  }
+
+  h2 {
+    font-family: var(--mono); font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-faint); font-weight: 500; margin: 32px 0 12px;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12.5px;
+    padding: 7px 12px; border-radius: 100px; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim);
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+  }
+  .chip .dot2 { width: 6px; height: 6px; border-radius: 50%; background: var(--off); }
+  .chip.on { background: var(--ok-wash); border-color: transparent; color: var(--ok); }
+  .chip.on .dot2 { background: var(--ok); }
+  .chip.charge { background: var(--warn-wash); border-color: transparent; color: var(--warn); }
+  .chip.charge .dot2 { background: var(--warn); }
+
+  .ports { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .port-card {
+    padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    transition: border-color 0.3s, background 0.3s;
+  }
+  .port-card.active { border-color: var(--accent); background: var(--accent-wash); }
+  .port-card .name { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .port-card .watts { font-family: var(--mono); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .port-card.active .watts { color: var(--accent); }
+  .port-card .state { font-size: 11px; color: var(--text-faint); margin-top: 4px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .settings-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+    background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  }
+  .settings-cell { background: var(--surface); padding: 12px 14px; }
+  .settings-cell .k { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+  .settings-cell .v { font-family: var(--mono); font-size: 15px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+  footer {
+    margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; color: var(--text-faint);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+
+  .offline-banner {
+    display: none; padding: 12px 16px; background: var(--warn-wash); color: var(--warn);
+    border-radius: 8px; font-family: var(--mono); font-size: 13px; margin-bottom: 20px;
+  }
+  .offline-banner.show { display: block; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="title-block">
+      <p class="eyebrow">Live telemetry</p>
+      <h1>767 PowerHouse</h1>
+      <div class="subtitle" id="device-line">connecting…</div>
+    </div>
+    <div class="conn-status">
+      <span class="dot" id="conn-dot"></span>
+      <span id="conn-label">connecting</span>
+    </div>
+  </header>
+
+  <div class="offline-banner" id="offline-banner"></div>
+
+  <div class="hero">
+    <div class="ring-wrap">
+      <svg width="128" height="128" viewBox="0 0 128 128">
+        <circle class="ring-bg" cx="64" cy="64" r="54"></circle>
+        <circle class="ring-fg" id="ring-fg" cx="64" cy="64" r="54" stroke-dasharray="339" stroke-dashoffset="339"></circle>
+      </svg>
+      <div class="ring-label">
+        <div class="pct" id="battery-pct">—</div>
+        <div class="lbl">battery</div>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num accent" id="stat-power">— W</div><div class="lbl">total output</div></div>
+      <div class="hero-stat"><div class="num" id="stat-input">— W</div><div class="lbl">AC input</div></div>
+      <div class="hero-stat"><div class="num" id="stat-temp">—°</div><div class="lbl">temperature</div></div>
+      <div class="sparkline">
+        <div class="lbl">power draw — last 10 min</div>
+        <canvas id="spark" width="800" height="96"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <h2>Status</h2>
+  <div class="chips" id="chips"></div>
+
+  <h2>Ports</h2>
+  <div class="ports" id="ports"></div>
+
+  <h2>Settings</h2>
+  <div class="settings-grid" id="settings"></div>
+
+  <footer>
+    <span id="last-update">no data yet</span>
+    <span id="serial-line">—</span>
+  </footer>
+
+</div>
+
+<script>
+  const el = id => document.getElementById(id);
+  const RING_CIRC = 2 * Math.PI * 54;
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(proto + "//" + location.host + "/ws");
+
+    ws.onopen = () => setConn(true);
+    ws.onclose = () => { setConn(false); setTimeout(connect, 2000); };
+    ws.onerror = () => ws.close();
+    ws.onmessage = (evt) => render(JSON.parse(evt.data));
+  }
+
+  function setConn(open) {
+    el("conn-dot").classList.toggle("live", open);
+    el("conn-label").textContent = open ? "connected" : "reconnecting…";
+  }
+
+  function render(s) {
+    const banner = el("offline-banner");
+    if (s.error) {
+      banner.textContent = s.error;
+      banner.classList.add("show");
+    } else {
+      banner.classList.remove("show");
+    }
+
+    if (!s.connected) {
+      el("device-line").textContent = "waiting for device…";
+      return;
+    }
+
+    el("device-line").textContent = (s.device_name || "767_PowerHouse") + "  ·  fw " + (s.firmware_version || "?") + "  ·  " + (s.device_address || "");
+    el("serial-line").textContent = "serial " + (s.serial_number || "—");
+    el("last-update").textContent = "last update " + (s.last_update || "—");
+
+    el("battery-pct").textContent = s.battery_percent + "%";
+    const offset = RING_CIRC - (s.battery_percent / 100) * RING_CIRC;
+    el("ring-fg").style.strokeDashoffset = offset;
+
+    el("stat-power").textContent = s.power_watts + " W";
+    el("stat-input").textContent = s.ac_input_watts + " W";
+    el("stat-temp").textContent = s.temperature_c + "°" + (s.temperature_unit === "F" ? "F" : "C");
+
+    const chips = [];
+    chips.push(chip("AC output", s.ac_output));
+    chips.push(chip("DC / Car socket", s.dc_output));
+    chips.push(chip("Cable connected", s.ac_cable_connected));
+    if (s.ac_charge_state === 2) chips.push({ label: "Charging", cls: "charge" });
+    if (s.light_mode && s.light_mode !== "off") chips.push({ label: "Light: " + s.light_mode, cls: "on" });
+    el("chips").innerHTML = chips.map(c =>
+      `<span class="chip ${c.cls}"><span class="dot2"></span>${c.label}</span>`
+    ).join("");
+
+    const ports = [...(s.usb_c || []).map(p => ({ ...p, group: "USB-C" })), ...(s.usb_a || []).map(p => ({ ...p, group: "USB-A" }))];
+    el("ports").innerHTML = ports.map(p => `
+      <div class="port-card ${p.active ? "active" : ""}">
+        <div class="name">${p.group} — ${p.label}</div>
+        <div class="watts">${p.watts}W</div>
+        <div class="state">${p.active ? "active" : "idle"}</div>
+      </div>
+    `).join("");
+
+    el("settings").innerHTML = `
+      <div class="settings-cell"><div class="k">Charge limit</div><div class="v">${s.ac_charging_power_limit ?? "—"}W</div></div>
+      <div class="settings-cell"><div class="k">Display timeout</div><div class="v">${s.display_timeout_seconds ?? "—"}s</div></div>
+      <div class="settings-cell"><div class="k">Brightness</div><div class="v">${s.display_brightness ?? "—"}</div></div>
+      <div class="settings-cell"><div class="k">Light mode</div><div class="v">${s.light_mode ?? "—"}</div></div>
+      <div class="settings-cell"><div class="k">Time remaining</div><div class="v">${s.time_remaining_hours ?? "—"}h</div></div>
+    `;
+
+    drawSpark(s.power_history || []);
+  }
+
+  function chip(label, on) {
+    return { label: label, cls: on ? "on" : "" };
+  }
+
+  function drawSpark(history) {
+    const canvas = el("spark");
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (history.length < 2) return;
+
+    const values = history.map(p => p.w);
+    const max = Math.max(...values, 10);
+    const stepX = w / (history.length - 1);
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue("--accent").trim();
+
+    ctx.beginPath();
+    history.forEach((p, i) => {
+      const x = i * stepX;
+      const y = h - (p.w / max) * (h - 8) - 4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(w, h);
+    ctx.lineTo(0, h);
+    ctx.closePath();
+    ctx.fillStyle = accent + "22";
+    ctx.fill();
+
+    ctx.beginPath();
+    history.forEach((p, i) => {
+      const x = i * stepX;
+      const y = h - (p.w / max) * (h - 8) - 4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const last = history[history.length - 1];
+    const lx = w, ly = h - (last.w / max) * (h - 8) - 4;
+    ctx.beginPath();
+    ctx.arc(lx - 3, ly, 3, 0, Math.PI * 2);
+    ctx.fillStyle = accent;
+    ctx.fill();
+  }
+
+  connect();
+</script>
+</body>
+</html>
