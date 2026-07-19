@@ -126,7 +126,26 @@ Firmware version                        47 (duplicated at 61)            Single 
                                                                           :attr:`SolixBLE.F2000.software_version` in
                                                                           the standard protocol. See
                                                                           :ref:`f2000_variant_firmware`.
-Total output power (W)                  41 (duplicated at 21)            Sum of all active outputs (AC+DC+USB+light).
+Total output power (W)                  17-18, LE16 (dup. 37-38)         Originally documented as offset 21 ("sum of
+                                                                          all active outputs") - that guess is now also
+                                                                          known to be wrong: offset 21 stayed at 0
+                                                                          throughout a real-load test (portable vacuum
+                                                                          on the DC output) despite genuine power
+                                                                          flowing. Offset 17-18 instead showed a
+                                                                          startup-inrush spike (4244, 4596) then
+                                                                          settled to a steady value (~190) matching the
+                                                                          load, and dropped to 0 when output was
+                                                                          disabled - used by
+                                                                          :attr:`~SolixBLE.F2000Alt.power_out`. Offset
+                                                                          21's actual meaning is unidentified (reads 0
+                                                                          in every test so far).
+Light bar status readback               41                               Live light-bar state. Originally documented
+                                                                          (wrongly) as "Total output power" and as a
+                                                                          duplicate of offset 21 - neither was true;
+                                                                          offset 21 stayed 0 throughout light-mode
+                                                                          testing while this offset changed. Off=0,
+                                                                          low=2, medium=3, high=4; SOS blinks between
+                                                                          0 and 2. See :ref:`f2000_alt_control`.
 AC input power while charging (W)       19-20, LE16 (dup. 39-40)         Only nonzero while charging.
 Time remaining — discharge (hours)      57-58, LE16, value ÷ 10          Does **not** update for "time to full charge"
                                                                           while charging — that field is not yet
@@ -168,9 +187,9 @@ Checksum                                Last byte (101 for ~102-byte     Not a s
     confirmed. By elimination it is most likely the remaining ("top") port, but this has not
     been independently re-verified.
 
-Bytes 17-18 (and their duplicate at 37-38) fluctuate on every poll regardless of load
-(observed with literally nothing connected to any output) and are **not understood**. They
-were ruled out as an output-power reading by comparing readings with vs. without a known load.
+Bytes 17-18 are now identified as total output power - see the "Total output power" row in
+the field map above (this replaces an earlier, incorrect characterization of these bytes as
+unexplained noise "fluctuating regardless of load").
 
 
 Settings/configuration block
@@ -195,8 +214,79 @@ Temperature display unit                119               0=Celsius, 1=Fahrenhei
 
 Unidentified in this block: bytes 103, 107, 116 (constant ``60`` in every capture so far) and
 bytes 109, 111 (constant ``1``). Candidates not yet tested: AC auto-off timer, DC auto-off
-timer, power-saving mode toggle.
+timer. The power saving mode *control command* has since been captured (see
+:ref:`f2000_alt_control`), but its readback byte in this settings block has not been
+identified — it did not correlate with any byte here or in the base frame during testing.
 
+
+.. _f2000_alt_control:
+
+Control commands
+-----------------
+
+Captured by repeating the capture methodology above while driving control (not just
+monitoring) from the Anker app — same HCI snoop technique, but toggling outputs/settings
+instead of just viewing status. All four below have been verified byte-for-byte against
+``SolixBLE``'s own command construction and against real hardware.
+
+Every control command shares the same shape as :data:`CMD_POLL_TELEMETRY`, written to
+``00007777...`` write-without-response:
+
+======================= ===================================================
+Prefix (6 bytes)        ``08ee000000 02`` (``02`` marks this as a control command,
+                         vs. ``01`` for the poll command)
+Field ID (1 byte)       Selects which control is being set — see table below
+Middle (2 bytes)        Fixed ``0b00`` in every command observed
+Value (1 byte)          The value being set
+Checksum (1 byte)       Unweighted sum of all preceding bytes, mod 256 — **not**
+                         the XOR checksum used by the encrypted-protocol devices
+                         (:meth:`SolixBLEDevice._checksum`)
+======================= ===================================================
+
+======================= ============ =====================================
+Control                 Field ID     Value
+======================= ============ =====================================
+AC output on/off        ``0x86``     ``0x01`` = on, ``0x00`` = off. Confirmed
+                                      live end-to-end via
+                                      :meth:`~SolixBLE.F2000Alt.turn_ac_on`/
+                                      :meth:`~SolixBLE.F2000Alt.turn_ac_off` against
+                                      real hardware — the base-frame AC output flag
+                                      (offset 63) flips immediately in both directions.
+DC/Car socket on/off    ``0x87``     ``0x01`` = on, ``0x00`` = off. Confirmed live
+                                      end-to-end via :meth:`~SolixBLE.F2000Alt.turn_dc_on`/
+                                      :meth:`~SolixBLE.F2000Alt.turn_dc_off` against real
+                                      hardware with a real 12V load (portable vacuum)
+                                      connected — the vacuum itself powered on/off with the
+                                      command, the base-frame DC output flag (offset 80/81)
+                                      flipped 0/1 in lockstep, and offset 17-18 (LE16) showed
+                                      a clear startup-inrush-then-settle current pattern while
+                                      the vacuum ran. Not to be confused with the field ``0x8a``
+                                      right below, which was initially (and incorrectly)
+                                      assumed to be this control.
+Power saving mode       ``0x8a``     ``0x01`` = on, ``0x00`` = off. Originally guessed to be
+                                      DC/Car socket output based on testing order (right after
+                                      AC) and adjacency to the AC field ID, but that guess was
+                                      **wrong** — with the real load test above, ``0x87`` (not
+                                      ``0x8a``) is what actually drives the DC/car socket port.
+                                      ``0x8a`` was confirmed by direct observation to instead
+                                      toggle the device's own power-saving-mode indicator.
+                                      Exposed as
+                                      :meth:`~SolixBLE.F2000Alt.turn_power_saving_mode_on`/
+                                      :meth:`~SolixBLE.F2000Alt.turn_power_saving_mode_off`.
+Light bar mode           ``0x8b``     Matches :class:`~SolixBLE.states.LightStatus`
+                                      exactly: ``0``\=off, ``1``\=low, ``2``\=medium,
+                                      ``3``\=high, ``4``\=SOS. Confirmed live end-to-end
+                                      via :meth:`~SolixBLE.F2000Alt.set_light_mode`
+                                      against real hardware, cycling low/medium/high/off
+                                      and observing offset 41 in the base frame track each
+                                      change immediately (low=2, medium=3, high=4, off=0).
+                                      This means offset 41 is **not** "Total output
+                                      power" as originally documented above — that
+                                      was a mistaken guess; it is a light-bar status
+                                      readback. Offset 17-18 (LE16) is a candidate for the
+                                      true output-power field instead — see the byte 17-18
+                                      note in the telemetry field map above.
+======================= ============ =====================================
 
 Known unknowns
 ---------------
@@ -204,20 +294,22 @@ Known unknowns
 - **Time to full charge** — the app displays this, but it is not the same field as "time
   remaining" (byte 57-58 stays fixed at its last discharge estimate while charging). Not
   located.
-- Bytes 8-16, 22, 24, 26, 28, 30, 32-38, 42-46, 59-60, 62, 64, 67, 69, 71, 73-74, 82-84 —
+- Bytes 8-16, 21, 22, 24, 26, 28, 30, 32-36, 42-46, 59-60, 62, 64, 67, 69, 71, 73-74, 82-84 —
   read as ``0`` in every test performed. Either unused/reserved, or fields for states not
   yet triggered (e.g. battery health %, expansion battery data, per-port negotiated
-  voltage/current, error/fault codes).
+  voltage/current, error/fault codes). Offset 21 was previously (and offset 41 was also
+  previously) listed here as "Total output power" — both guesses were wrong; the real total
+  output power field is offset 17-18, and offset 41 is the light-bar readback. See the field
+  map and Control commands sections above.
 - Fixed constant bytes 47, 49, 51, 53, 61, 72 — never observed to change; purpose unknown
   (possibly a device/model/protocol-version identifier).
 - Settings block bytes 103, 107, 109, 111, 116 — see above.
-- The two Car socket outputs (bytes 80/81) have only been tested as a pair, never
-  independently.
-- **Control commands are not yet captured.** Every finding above comes from observing
-  telemetry in response to physical button presses / app-driven display changes — the actual
-  BLE write payloads the app uses to *command* the device (turn AC/DC/light on/off remotely)
-  have not been captured. This would require repeating the capture methodology above while
-  driving control (not just monitoring) from the Anker app.
+- The two Car socket outputs (bytes 80/81) have only been observed as a pair, never
+  independently. They are now confirmed to flip together 0/1 with DC/Car socket output
+  (field ``0x87``, see Control commands) under a real 12V load (portable vacuum).
+- Display on/off, AC/DC auto-off timers, and AC charging power limit control commands have
+  not been captured yet. Power saving mode's control command has been captured, but its
+  telemetry readback byte has not.
 
 
 Reference implementation

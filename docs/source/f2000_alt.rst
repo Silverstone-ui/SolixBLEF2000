@@ -7,8 +7,10 @@ F2000 (767 PowerHouse) - alternate hardware variant
     :class:`~SolixBLE.F2000`.
 
 .. note::
-    Read-only. Control (turning outputs on/off, changing settings) is not yet
-    implemented for this variant.
+    Control (AC output, DC/Car socket output, power saving mode, light bar
+    mode) has been captured and confirmed working against real hardware.
+    Display, timers, and AC charging power control have not been captured
+    yet - see :doc:`f2000_hardware_variant` for details.
 
 .. autoclass:: SolixBLE.F2000Alt
    :members:

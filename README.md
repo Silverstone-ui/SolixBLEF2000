@@ -47,7 +47,10 @@ See the [support table](https://solixble.readthedocs.io/en/latest) in the docume
 - C800(X)
 - C1000(X)
 - C1000 Gen 2
-- F2000 (767 PowerHouse)
+- F2000 (767 PowerHouse) — including a firmware-specific alternate-protocol
+  revision some units speak instead of the standard encrypted protocol; see
+  [the hardware variant docs](https://solixble.readthedocs.io/en/latest/f2000_hardware_variant.html)
+  for how to identify which one your unit uses
 - F2600
 - F3800
 - Solarbank 2

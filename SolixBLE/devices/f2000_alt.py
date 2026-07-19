@@ -35,6 +35,19 @@ UUID_TELEMETRY = "00008888-0000-1000-8000-00805f9b34fb"
 #: response containing the settings block, in addition to base telemetry.
 CMD_POLL_TELEMETRY = bytes.fromhex("08ee00000001010a0002")
 
+#: Common prefix for all control (as opposed to poll) commands.
+_CMD_CONTROL_PREFIX = bytes.fromhex("08ee00000002")
+
+#: Field IDs for the byte following :data:`_CMD_CONTROL_PREFIX` in a control
+#: command, identifying which control is being set.
+_FIELD_AC_OUTPUT = 0x86
+_FIELD_DC_OUTPUT = 0x87
+_FIELD_POWER_SAVING_MODE = 0x8A
+_FIELD_LIGHT_MODE = 0x8B
+
+#: Fixed bytes following the field ID in every control command observed so far.
+_CONTROL_MIDDLE = bytes.fromhex("0b00")
+
 #: Minimum notification length to be considered a real telemetry frame,
 #: filtering out the small ~14 byte heartbeat/ack frames this device also
 #: sends periodically.
@@ -84,9 +97,11 @@ class F2000Alt(SolixBLEDevice):
         TLV scheme).
 
     .. note::
-        Control (turning outputs on/off, changing settings) is not yet
-        implemented - the command bytes the Anker app sends to control this
-        variant have not been captured. Currently read-only.
+        Control commands (AC output, DC/Car socket output, power saving mode,
+        light bar mode) have been captured and confirmed working against real
+        hardware - see :doc:`the hardware variant documentation
+        </f2000_hardware_variant>` for the command format. Display, timers,
+        and AC charging power have not been captured yet.
     """
 
     def __init__(self, *args, **kwargs) -> None:
@@ -282,9 +297,22 @@ class F2000Alt(SolixBLEDevice):
     def power_out(self) -> int:
         """Total output power across all active outputs (watts).
 
+        .. note::
+            Previously read offset 41, which was a mistaken guess - that byte
+            is actually the light-bar status readback (see
+            :doc:`/f2000_hardware_variant`). This now reads offset 17-18
+            instead, based on a real-load test (portable vacuum on the DC
+            output) that showed a startup-inrush spike followed by a steady
+            value consistent with the vacuum's running power draw, while
+            offset 41 stayed at its light-bar-status value throughout and
+            offset 21 (the original candidate) stayed at 0 the entire time
+            despite the real load. May report an elevated transient value
+            for several seconds after an output is enabled before settling
+            to steady-state power (observed taking up to ~7s in testing).
+
         :returns: Total power out or default int value.
         """
-        return self._byte(41)
+        return self._le16(17)
 
     @property
     def ac_power_in(self) -> int:
@@ -574,3 +602,86 @@ class F2000Alt(SolixBLEDevice):
         if value == 1:
             return TemperatureUnit.FAHRENHEIT
         return TemperatureUnit.UNKNOWN
+
+    async def _send_control(self, field_id: int, value: int) -> None:
+        """Send a control command.
+
+        Control commands share a common shape with :data:`CMD_POLL_TELEMETRY`:
+        a fixed prefix, a single field-ID byte selecting what is being set, a
+        fixed middle section, a one-byte value, and a trailing checksum byte
+        (the unweighted sum of every preceding byte, mod 256 - not the XOR
+        checksum used by the encrypted-protocol devices).
+
+        :param field_id: Field ID byte selecting which control to set.
+        :param value: Value byte to set the field to.
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        if not self.connected:
+            raise ConnectionError(f"Not connected to '{self.name}'!")
+
+        body = _CMD_CONTROL_PREFIX + bytes([field_id]) + _CONTROL_MIDDLE + bytes([value])
+        checksum = sum(body) % 256
+        command = body + bytes([checksum])
+
+        await self._client.write_gatt_char(UUID_COMMAND, command, response=False)
+
+    async def turn_ac_on(self) -> None:
+        """Turn the AC output on.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        await self._send_control(_FIELD_AC_OUTPUT, 1)
+
+    async def turn_ac_off(self) -> None:
+        """Turn the AC output off.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        await self._send_control(_FIELD_AC_OUTPUT, 0)
+
+    async def turn_dc_on(self) -> None:
+        """Turn the DC/Car socket output on.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        await self._send_control(_FIELD_DC_OUTPUT, 1)
+
+    async def turn_dc_off(self) -> None:
+        """Turn the DC/Car socket output off.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        await self._send_control(_FIELD_DC_OUTPUT, 0)
+
+    async def turn_power_saving_mode_on(self) -> None:
+        """Turn power saving mode on.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        await self._send_control(_FIELD_POWER_SAVING_MODE, 1)
+
+    async def turn_power_saving_mode_off(self) -> None:
+        """Turn power saving mode off.
+
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        await self._send_control(_FIELD_POWER_SAVING_MODE, 0)
+
+    async def set_light_mode(self, mode: LightStatus) -> None:
+        """Set the light bar mode.
+
+        :param mode: Mode to set the light bar to.
+        :raises ValueError: If requested mode is invalid.
+        :raises ConnectionError: If not connected to device.
+        :raises BleakError: If command transmission fails.
+        """
+        if mode is LightStatus.UNKNOWN:
+            raise ValueError("You cannot set the light status to unknown")
+        await self._send_control(_FIELD_LIGHT_MODE, mode.value)
