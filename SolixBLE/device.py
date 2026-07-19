@@ -377,7 +377,9 @@ class SolixBLEDevice:
 
         return packet_pattern, packet_cmd, packet_payload
 
-    def _parse_payload(self, payload: bytearray | bytes) -> dict[str, bytes]:
+    def _parse_payload(
+        self, payload: bytearray | bytes, strict: bool = False
+    ) -> dict[str, bytes]:
         """
         Parse payload bytes into parameters.
 
@@ -389,7 +391,12 @@ class SolixBLEDevice:
         but the successfully parsed parameters (if any) will be returned.
 
         :param payload: Payload to parse into parameters.
+        :param strict: If True, re-raise on a partial/failed parse instead of
+            returning the partial result. Callers that feed the result into the
+            cached device state should use this, so a malformed packet cannot
+            replace good telemetry with a handful of keys.
         :returns: Dictionary mapping parameter ids (a1, a2, ...) to data.
+        :raises IndexError: If strict is True and the payload is malformed.
         """
 
         def _verbose_pop(data: bytearray, length: int, name: str) -> bytes:
@@ -460,6 +467,8 @@ class SolixBLEDevice:
                     f" Extracted so far: '{self._parameters_to_str(parsed_data)}'."
                     f" Payload: '{payload.hex()}'"
                 )
+                if strict:
+                    raise
 
         return parsed_data
 
@@ -568,7 +577,14 @@ class SolixBLEDevice:
 
         decrypted_payload = self._decrypt_payload(payload)
         _LOGGER.debug(f"Decrypted payload: {decrypted_payload.hex()}")
-        parameters = self._parse_payload(decrypted_payload)
+        try:
+            parameters = self._parse_payload(decrypted_payload, strict=True)
+        except IndexError:
+            _LOGGER.warning(
+                "Ignoring malformed telemetry packet. Keeping the previously"
+                " cached telemetry rather than replacing it with a partial parse."
+            )
+            return
         return await self._process_telemetry(parameters)
 
     async def _process_telemetry(self, parameters: dict[str, bytes]) -> None:
@@ -651,7 +667,15 @@ class SolixBLEDevice:
                 # Non-encrypted telemetry messages
                 if cmd.hex() == "0300":
                     _LOGGER.debug("Received non-encrypted telemetry message!")
-                    parameters = self._parse_payload(payload)
+                    try:
+                        parameters = self._parse_payload(payload, strict=True)
+                    except IndexError:
+                        _LOGGER.warning(
+                            "Ignoring malformed telemetry packet. Keeping the"
+                            " previously cached telemetry rather than replacing"
+                            " it with a partial parse."
+                        )
+                        return
                     return await self._process_telemetry(parameters)
 
                 # Encrypted telemetry messages
