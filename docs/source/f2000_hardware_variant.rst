@@ -224,6 +224,11 @@ Field                                   Offset(s)         Notes
 AC charging power limit (W)             101-102, LE16     Verified exact match (1440).
 Display timeout (seconds)               105-106, LE16     Verified exact match (60 → 30).
 Display brightness                      115               Verified exact match (1=low → 2=medium).
+Power saving mode enabled               117               0=off, 1=on. Confirmed via two full live
+                                                            ON/OFF cycles producing a clean 0/1/0/1/0
+                                                            pattern - the only offset in the frame that
+                                                            did. Used by
+                                                            :attr:`~SolixBLE.F2000Alt.power_saving_mode_enabled`.
 Light bar mode                          118               0=off, 1=low, 2=medium, 3=high, 4=SOS.
                                                             Matches :class:`~SolixBLE.states.LightStatus`
                                                             exactly. Verified across all 5 states.
@@ -234,9 +239,8 @@ Temperature display unit                119               0=Celsius, 1=Fahrenhei
 
 Unidentified in this block: bytes 103, 107, 116 (constant ``60`` in every capture so far) and
 bytes 109, 111 (constant ``1``). Candidates not yet tested: AC auto-off timer, DC auto-off
-timer. The power saving mode *control command* has since been captured (see
-:ref:`f2000_alt_control`), but its readback byte in this settings block has not been
-identified — it did not correlate with any byte here or in the base frame during testing.
+timer. The power saving mode *control command* (see :ref:`f2000_alt_control`) and its
+readback (offset 117, see the field map above) have both since been confirmed.
 
 
 .. _f2000_alt_control:
@@ -297,6 +301,9 @@ Power saving mode       ``0x8a``     ``0x01`` = on, ``0x00`` = off. Originally g
                                       Exposed as
                                       :meth:`~SolixBLE.F2000Alt.turn_power_saving_mode_on`/
                                       :meth:`~SolixBLE.F2000Alt.turn_power_saving_mode_off`.
+                                      Its telemetry readback was later found too: offset 117
+                                      in the settings block (see the field map above), exposed
+                                      as :attr:`~SolixBLE.F2000Alt.power_saving_mode_enabled`.
 Light bar mode           ``0x8b``     Matches :class:`~SolixBLE.states.LightStatus`
                                       exactly: ``0``\=off, ``1``\=low, ``2``\=medium,
                                       ``3``\=high, ``4``\=SOS. Confirmed live end-to-end

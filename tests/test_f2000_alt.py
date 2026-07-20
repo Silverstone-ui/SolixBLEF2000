@@ -46,6 +46,20 @@ def _telemetry_frame(
     return bytes(frame)
 
 
+def _extended_frame(power_saving: int = 1, length: int = 122) -> bytes:
+    """Build an extended (settings-block) frame with a probe value at offset 117.
+
+    :param power_saving: Value to place at offset 117 - the power-saving-mode
+        readback confirmed by a live two-cycle ON/OFF test, read by
+        :attr:`F2000Alt.power_saving_mode_enabled`.
+    :param length: Frame length; must be >= 120 to be treated as an extended
+        frame by F2000Alt._on_notify.
+    """
+    frame = bytearray(length)
+    frame[117] = power_saving
+    return bytes(frame)
+
+
 async def _connected_device(
     mock_bluetooth: MockDevice, telemetry: bytes | None = None
 ) -> F2000Alt:
@@ -92,6 +106,28 @@ async def test_ac_output_power_reads_offset_21():
         )
         assert device.ac_output_power == 65
         assert device.ac_output_power != device.power_out
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "raw_value,expected",
+    [
+        pytest.param(0, False, id="off"),
+        pytest.param(1, True, id="on"),
+    ],
+)
+async def test_power_saving_mode_enabled_reads_offset_117(raw_value: int, expected: bool):
+    """power_saving_mode_enabled must read offset 117 in the extended frame."""
+    async with MockDevice() as mock_bluetooth:
+        device = await _connected_device(mock_bluetooth)
+
+        mock_bluetooth.expect_ordered(
+            CMD_POLL_TELEMETRY, response=[_extended_frame(power_saving=raw_value)]
+        )
+        await device.get_status_update()
+        mock_bluetooth.check_assertions()
+
+        assert device.power_saving_mode_enabled is expected
 
 
 @pytest.mark.asyncio

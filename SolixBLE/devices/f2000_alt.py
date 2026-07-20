@@ -606,6 +606,23 @@ class F2000Alt(SolixBLEDevice):
         return _DISPLAY_BRIGHTNESS.get(self._byte(115, extended=True), LightStatus.UNKNOWN)
 
     @property
+    def power_saving_mode_enabled(self) -> bool | None:
+        """Whether power saving mode is enabled.
+
+        Confirmed via a live-hardware test: toggling
+        :meth:`turn_power_saving_mode_on`/:meth:`turn_power_saving_mode_off`
+        through two full cycles produced a clean 0/1/0/1/0 pattern at this
+        offset and nowhere else in the settings block. Only populated after
+        :meth:`get_status_update`.
+
+        :returns: True if enabled, False if disabled, or default bool value.
+        """
+        value = self._byte(117, extended=True)
+        if value == DEFAULT_METADATA_INT:
+            return DEFAULT_METADATA_BOOL
+        return value != 0
+
+    @property
     def light(self) -> LightStatus:
         """Light bar status.
 
