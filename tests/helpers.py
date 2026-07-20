@@ -5,6 +5,7 @@
 """
 
 import asyncio
+import inspect
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -217,8 +218,12 @@ class MockDevice:
                     _LOGGER.debug(
                         f"Mock device sending '{packet.hex()}' to client '{client}' for callback '{callback}'..."
                     )
-                    # Handle is not used
-                    await callback(None, packet)
+                    # Handle is not used. Notify callbacks may be sync or
+                    # async (real bleak invokes them synchronously; only
+                    # await if the callback actually returned one).
+                    result = callback(None, packet)
+                    if inspect.isawaitable(result):
+                        await result
 
                 # Wait between sending
                 await asyncio.sleep(0.1)

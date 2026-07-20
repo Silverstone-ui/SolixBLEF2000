@@ -295,24 +295,51 @@ class F2000Alt(SolixBLEDevice):
 
     @property
     def power_out(self) -> int:
-        """Total output power across all active outputs (watts).
+        """AC output + light bar power combined (watts).
 
         .. note::
-            Previously read offset 41, which was a mistaken guess - that byte
-            is actually the light-bar status readback (see
-            :doc:`/f2000_hardware_variant`). This now reads offset 17-18
-            instead, based on a real-load test (portable vacuum on the DC
-            output) that showed a startup-inrush spike followed by a steady
-            value consistent with the vacuum's running power draw, while
-            offset 41 stayed at its light-bar-status value throughout and
-            offset 21 (the original candidate) stayed at 0 the entire time
-            despite the real load. May report an elevated transient value
-            for several seconds after an output is enabled before settling
-            to steady-state power (observed taking up to ~7s in testing).
+            Previously read offset 17-18, based on a DC-only (vacuum) load
+            test that was never actually cross-checked against the unit's
+            own screen. A later live session, with the unit's screen visible
+            during an AC (fan) load test, found offset 17-18 reads ~3.3x too
+            high and does not respond to light-bar power changes - it does
+            not track real output power. Offset 41 does: it matched the
+            screen's displayed wattage within 1W under an AC load, and
+            tracked exact +2/+3/+4W increments as the light bar was set to
+            LOW/MEDIUM/HIGH on top of that - consistent with the light bar's
+            own real power draw. This also reconciles two earlier sessions'
+            tests that looked contradictory: a DC-only (vacuum) test where
+            this offset stayed constant (AC and light were both off, and
+            this offset doesn't include DC/car-socket output), and an
+            idle-except-light sweep where it tracked 0/2/3/4 exactly
+            (with AC off, that was 100% the light bar's own draw). See
+            :attr:`ac_output_power` for the AC-only component (offset 21),
+            and :doc:`/f2000_hardware_variant` for the full writeup.
 
-        :returns: Total power out or default int value.
+        .. warning::
+            Does **not** include DC/car-socket output - a real DC load left
+            this value unchanged in testing. There is currently no known
+            field that sums every output (AC + DC + light + USB); this is
+            the closest available approximation. Also single-byte (max 255W)
+            unlike offset 17-18's LE16 - a high-wattage AC load could wrap.
+
+        :returns: AC + light bar power out or default int value.
         """
-        return self._le16(17)
+        return self._byte(41)
+
+    @property
+    def ac_output_power(self) -> int:
+        """AC output power only, excluding the light bar (watts).
+
+        Confirmed via a live-hardware test: matched the unit's own screen
+        display within 1W under a real AC (fan) load, and was unaffected by
+        light bar mode changes that did move :attr:`power_out`. Does not
+        include DC/car-socket or light bar output. See
+        :doc:`/f2000_hardware_variant` for the full writeup.
+
+        :returns: AC output power or default int value.
+        """
+        return self._byte(21)
 
     @property
     def ac_power_in(self) -> int:

@@ -22,7 +22,7 @@ def decode(data: bytes) -> dict:
         "battery_percent": data[70],
         "temperature_c": data[66],
         "ac_input_watts": int.from_bytes(data[19:21], "little"),
-        "power_out_watts": data[41],
+        "ac_plus_light_out_watts": data[41],  # AC output + light bar combined, not DC
         "ac_output": bool(data[63]),
         "charging_flag": data[65],
         "ac_charge_state": data[68],
