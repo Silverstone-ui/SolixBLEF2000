@@ -165,11 +165,10 @@ AC + light bar output power (W)         41, single byte                  Same re
                                                                           bar's own power draw, not a status code. The
                                                                           real light-bar mode readback is offset 118 in
                                                                           the settings block (see below), unrelated to
-                                                                          this offset. SOS mode was re-tested live and
-                                                                          did not produce a distinguishable value at
-                                                                          this offset (inconclusive - possibly too fast
-                                                                          for the device's own telemetry push rate to
-                                                                          capture).
+                                                                          this offset. SOS mode settles to a steady
+                                                                          value equal to LOW's (2) at this offset,
+                                                                          not an alternating one - see
+                                                                          :ref:`f2000_alt_app_snoop_validation`.
 Total output power (W), offset 17-18    17-18, LE16 (dup. 37-38)         Formerly used by :attr:`power_out`. The same
 (meaning unidentified)                                                   re-test found this reads ~3.3x higher than
                                                                           the AC load actually measured (both by the
@@ -336,10 +335,50 @@ Light bar mode           ``0x8b``     Matches :class:`~SolixBLE.states.LightStat
                                       wattage because AC was off at the time, making it look
                                       like a clean enum. The actual light-bar mode readback
                                       is offset 118 in the settings block (see above), which
-                                      is unrelated to offset 41. SOS was re-tested with the
-                                      light visibly blinking but produced no distinguishable
-                                      offset 41 value — inconclusive, not pursued further.
+                                      is unrelated to offset 41. SOS was re-tested twice: a
+                                      live ~15s raw-frame log while the light visibly blinked
+                                      produced no distinguishable offset 41 value at that
+                                      polling rate; a later real HCI-snoop capture of the
+                                      official app (full/unfiltered, not rate-limited by
+                                      polling) resolved this - offset 41 settles to a
+                                      **steady** value equal to LOW's (2), not an alternating
+                                      one, for the whole SOS window. Most likely explanation:
+                                      whatever this field samples/averages, SOS's effective
+                                      power draw over that window equals LOW's steady draw,
+                                      even though the light itself visibly blinks.
 ======================= ============ =====================================
+
+.. _f2000_alt_app_snoop_validation:
+
+Independent validation against the official app
+-------------------------------------------------
+
+All of the above was re-verified byte-for-byte against a real HCI snoop capture of the
+official Anker app (not this library) driving a unit through AC on/off, DC on/off, power
+saving on/off, and all five light modes. Every command the app sent matched this library's
+own command construction exactly - same field ID, same value, same checksum:
+
+======================= ===================================================
+App command (hex)      Decoded
+======================= ===================================================
+``08ee00000002860b00018a``   AC on (field ``0x86``, value ``0x01``)
+``08ee00000002860b000089``   AC off
+``08ee00000002870b00018b``   DC/car socket on (field ``0x87``, value ``0x01``)
+``08ee00000002870b00008a``   DC/car socket off
+``08ee000000028a0b00018e``   Power saving on (field ``0x8a``, value ``0x01``)
+``08ee000000028a0b00008d``   Power saving off
+``08ee000000028b0b00008e``   Light off (field ``0x8b``, value ``0x00``)
+``08ee000000028b0b00018f``   Light low (value ``0x01``)
+``08ee000000028b0b000290``   Light medium (value ``0x02``)
+``08ee000000028b0b000391``   Light high (value ``0x03``)
+``08ee000000028b0b000492``   Light SOS (value ``0x04``)
+======================= ===================================================
+
+The capture methodology used here (and the one that produces a *usable* capture, unlike an
+earlier attempt this session that captured only truncated packets - see
+``examples/parse_hci_snoop.py``'s docstring) is: Developer options → Bluetooth HCI snoop log
+→ **Full** (not the default "Filtered" mode, which redacts most payload data), then a bug
+report taken shortly after the app session.
 
 Known unknowns
 ---------------
