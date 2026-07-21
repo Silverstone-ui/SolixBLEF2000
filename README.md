@@ -47,8 +47,10 @@ See the [support table](https://solixble.readthedocs.io/en/latest) in the docume
 - C800(X)
 - C1000(X)
 - C1000 Gen 2
-- F2000 (767 PowerHouse) — including a firmware-specific alternate-protocol
-  revision some units speak instead of the standard encrypted protocol; see
+- F2000 (767 PowerHouse) — including an alternate-protocol hardware variant
+  some units speak instead of the standard encrypted protocol (evidence
+  points to a distinct hardware/BOM revision, not just firmware - see the
+  docs); see
   [the hardware variant docs](https://solixble.readthedocs.io/en/latest/f2000_hardware_variant.html)
   for how to identify which one your unit uses
 - F2600

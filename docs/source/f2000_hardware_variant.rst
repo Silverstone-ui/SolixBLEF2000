@@ -17,10 +17,17 @@ This page documents that alternate protocol so it can be added as a variant/subc
 other owners of the same hardware revision can identify it and contribute further findings,
 per the process described in :doc:`new_devices` and :ref:`new_device_control`.
 
-It is not currently known exactly what distinguishes hardware/firmware revisions that speak
-this protocol from ones that speak the standard encrypted protocol — only one unit has been
-examined so far. If you own a 767 PowerHouse, the methods below (ordered from easiest/most
-reliable to more speculative) let you check which protocol yours speaks.
+This is most likely a genuine hardware/BOM revision, not just a firmware branch. The one
+alt-protocol unit examined has BLE MAC OUI ``E8:EE:CC:...``. A second owner (of the upstream
+project this was forked from) checked two of their own units for comparison — a C1000 and a
+standard-protocol F2000 — and both reported OUI ``F4:9D:8A:...`` instead, a different Bluetooth
+chip vendor. Their F2000 also has WiFi hardware in addition to Bluetooth; nothing in this
+alt-protocol unit's capture ever showed WiFi. A firmware update doesn't swap the physical BT
+chip or add a WiFi radio, so this is real evidence of a distinct hardware revision rather than
+a firmware-gated feature — though it's still only one alt-protocol unit vs. two standard-protocol
+ones, so treat this as strong-but-not-conclusive. If you own a 767 PowerHouse, the methods below
+(ordered from easiest/most reliable to more speculative) let you check which protocol yours
+speaks.
 
 
 Identifying your hardware
@@ -50,9 +57,17 @@ attempting negotiation) distinguishes them cleanly. Equivalently, if you just tr
 with the existing :class:`~SolixBLE.F2000` class, ``connect()`` will fail at the
 notification-subscription step with a ``BleakCharacteristicNotFoundError`` for ``8c850003``.
 
-**4. Weaker, single-sample clues** (not confirmed as reliable — only one unit examined):
+**4. BLE MAC address OUI.** ``E8:EE:CC:...`` on the one alt-protocol unit examined, vs.
+``F4:9D:8A:...`` confirmed on two standard-protocol units (a C1000 and a F2000) from a second
+owner. Different Bluetooth chip vendor — a real signal, though still based on a small sample.
 
-- BLE MAC address OUI ``E8:EE:CC:...`` (identifies the Bluetooth chip vendor used in this unit).
+**5. WiFi hardware presence.** The standard-protocol F2000 checked above has WiFi in addition
+to Bluetooth. Nothing in the alt-protocol unit's capture ever indicated WiFi capability. Not
+independently confirmed as a reliable distinguishing method yet, but consistent with the OUI
+evidence above.
+
+**6. Weaker, single-sample clue** (not confirmed as reliable — only one unit examined):
+
 - Serial number prefix ``AZVX2Y0E...``.
 
 
