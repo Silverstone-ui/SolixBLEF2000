@@ -709,9 +709,16 @@ class SolixBLEDevice:
                         _LOGGER.debug(
                             f"Parameters: {self._parameters_to_str(parameters, types=True)}"
                         )
-                    except Exception:
-                        _LOGGER.exception(
-                            "Exception decrypting unknown message type"
+                    except Exception as e:
+                        # This branch only inspects unrecognised message types
+                        # for debugging; the result is not used to update state.
+                        # A decrypt/parse failure here is expected (the message
+                        # may not be encrypted telemetry at all) and harmless,
+                        # so log it quietly rather than as an error+traceback.
+                        _LOGGER.debug(
+                            "Could not decode unknown message type %s (ignored): %s",
+                            cmd.hex(),
+                            e,
                         )
 
             case _:
