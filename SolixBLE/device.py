@@ -42,6 +42,7 @@ from .const import (
     PRIVATE_KEY,
     RECONNECT_ATTEMPTS_MAX,
     RECONNECT_DELAY,
+    RECONNECT_DELAY_MAX,
     UUID_COMMAND,
     UUID_TELEMETRY,
 )
@@ -136,15 +137,17 @@ class SolixBLEDevice:
                 disconnected_callback=self._disconnect_callback,
             )
 
-        except BleakError:
-            _LOGGER.exception(
-                f"Error establishing initial connection to '{self.name}'!"
-            )
+        except BleakError as e:
+            # Expected and potentially frequent (e.g. the device is asleep or
+            # out of range and the reconnect loop keeps trying). Log at debug so
+            # it does not flood the log with tracebacks. Setup failures are
+            # surfaced to the user separately via ConfigEntryNotReady.
+            _LOGGER.debug("Error establishing connection to '%s': %s", self.name, e)
 
         # If we are still not connected then we have failed
         if not self.connected:
-            _LOGGER.error(
-                f"Failed to establish initial connection to '{self.name}' on attempt {self._connection_attempts}!"
+            _LOGGER.debug(
+                f"Failed to establish connection to '{self.name}' on attempt {self._connection_attempts}!"
             )
             return False
 
@@ -1012,9 +1015,13 @@ class SolixBLEDevice:
                     # are disconnected
                     async with asyncio.timeout(DISCONNECT_TIMEOUT):
 
+                        # Back off exponentially between attempts so an
+                        # unreachable device is not retried every few seconds.
+                        reconnect_delay = RECONNECT_DELAY
+
                         while _can_retry():
 
-                            await asyncio.sleep(RECONNECT_DELAY)
+                            await asyncio.sleep(reconnect_delay)
 
                             try:
                                 attempt_number = self._connection_attempts
@@ -1030,10 +1037,17 @@ class SolixBLEDevice:
 
                                     # Break out of this loop back to loop waiting for disconnect event
                                     break
-                            except Exception:
-                                _LOGGER.exception(
-                                    f"""Exception raised attempting to {"silently" if not run_callbacks_on_reconnect else ""} reconnect to '{self.name}'!"""
+                            except Exception as e:
+                                _LOGGER.debug(
+                                    "Exception attempting to reconnect to '%s': %s",
+                                    self.name,
+                                    e,
                                 )
+
+                            # Grow the delay (capped) after each failed attempt.
+                            reconnect_delay = min(
+                                reconnect_delay * 2, RECONNECT_DELAY_MAX
+                            )
 
                 # If timeout exceeded
                 except asyncio.TimeoutError:
