@@ -18,14 +18,10 @@ UUID_IDENTIFIER = "0000ff09-0000-1000-8000-00805f9b34fb"
 #: standard encrypted protocol.
 UUID_IDENTIFIER_F2000_ALT = "00001780-0000-1000-8000-00805f9b34fb"
 
-#: Time to wait before re-connecting on an unexpected disconnect.
+#: Time to wait before re-connecting on an unexpected disconnect. Kept short:
+#: these devices only stay connectable for a couple of seconds when they
+#: advertise, so frequent retries are needed to catch that window.
 RECONNECT_DELAY = 3
-
-#: Upper bound for the reconnect delay. The delay backs off exponentially from
-#: RECONNECT_DELAY up to this value so an unreachable device (e.g. one that has
-#: gone to sleep) is not hammered every few seconds, which spams the log and
-#: churns the Bluetooth connection slot.
-RECONNECT_DELAY_MAX = 60
 
 #: Maximum number of automatic re-connection attempts the program will make.
 RECONNECT_ATTEMPTS_MAX = -1

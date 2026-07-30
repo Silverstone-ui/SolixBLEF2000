@@ -42,7 +42,6 @@ from .const import (
     PRIVATE_KEY,
     RECONNECT_ATTEMPTS_MAX,
     RECONNECT_DELAY,
-    RECONNECT_DELAY_MAX,
     UUID_COMMAND,
     UUID_TELEMETRY,
 )
@@ -1015,13 +1014,13 @@ class SolixBLEDevice:
                     # are disconnected
                     async with asyncio.timeout(DISCONNECT_TIMEOUT):
 
-                        # Back off exponentially between attempts so an
-                        # unreachable device is not retried every few seconds.
-                        reconnect_delay = RECONNECT_DELAY
-
                         while _can_retry():
 
-                            await asyncio.sleep(reconnect_delay)
+                            # Retry frequently: these devices only stay
+                            # connectable for a couple of seconds when they
+                            # advertise, so a short, fixed delay is needed to
+                            # catch that window. Do NOT back this off.
+                            await asyncio.sleep(RECONNECT_DELAY)
 
                             try:
                                 attempt_number = self._connection_attempts
@@ -1038,16 +1037,14 @@ class SolixBLEDevice:
                                     # Break out of this loop back to loop waiting for disconnect event
                                     break
                             except Exception as e:
+                                # Expected while the device is unreachable; keep
+                                # it at debug so the reconnect loop does not
+                                # flood the log.
                                 _LOGGER.debug(
                                     "Exception attempting to reconnect to '%s': %s",
                                     self.name,
                                     e,
                                 )
-
-                            # Grow the delay (capped) after each failed attempt.
-                            reconnect_delay = min(
-                                reconnect_delay * 2, RECONNECT_DELAY_MAX
-                            )
 
                 # If timeout exceeded
                 except asyncio.TimeoutError:
