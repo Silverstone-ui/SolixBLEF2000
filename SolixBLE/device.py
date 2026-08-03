@@ -431,7 +431,10 @@ class SolixBLEDevice:
                     f" '{new_bytes.hex()}' but expected {length - len(data_copy)}"
                     f" more bytes!"
                 )
-                _LOGGER.exception(message)
+                # Re-raised and handled by the caller (a partial/unsupported
+                # record is expected for some devices), so log at debug to avoid
+                # error-level noise.
+                _LOGGER.debug(message)
                 raise IndexError(message) from e
 
         parsed_data: dict[str, bytes] = {}
@@ -464,13 +467,20 @@ class SolixBLEDevice:
                 parsed_data[param_id] = param_data
 
             except IndexError:
-                _LOGGER.exception(
-                    f"Unexpected end of packet! Data may be missing or invalid!"
-                    f" Extracted so far: '{self._parameters_to_str(parsed_data)}'."
-                    f" Payload: '{payload.hex()}'"
-                )
                 if strict:
+                    # The caller handles this (it skips the update rather than
+                    # replacing good telemetry). Don't log a traceback here for
+                    # what is an expected, recoverable condition - some devices
+                    # periodically send records this parser cannot decode (e.g.
+                    # a 'charging_pps_series' info record with a length encoding
+                    # we don't support).
                     raise
+                _LOGGER.debug(
+                    "Unexpected end of packet (missing data or an unsupported"
+                    " record). Extracted so far: '%s'. Payload: '%s'",
+                    self._parameters_to_str(parsed_data),
+                    payload.hex(),
+                )
 
         return parsed_data
 
@@ -582,9 +592,10 @@ class SolixBLEDevice:
         try:
             parameters = self._parse_payload(decrypted_payload, strict=True)
         except IndexError:
-            _LOGGER.warning(
-                "Ignoring malformed telemetry packet. Keeping the previously"
-                " cached telemetry rather than replacing it with a partial parse."
+            _LOGGER.debug(
+                "Ignoring malformed/unsupported telemetry packet; keeping the"
+                " previously cached telemetry rather than replacing it with a"
+                " partial parse."
             )
             return
         return await self._process_telemetry(parameters)
@@ -672,10 +683,10 @@ class SolixBLEDevice:
                     try:
                         parameters = self._parse_payload(payload, strict=True)
                     except IndexError:
-                        _LOGGER.warning(
-                            "Ignoring malformed telemetry packet. Keeping the"
-                            " previously cached telemetry rather than replacing"
-                            " it with a partial parse."
+                        _LOGGER.debug(
+                            "Ignoring malformed/unsupported telemetry packet;"
+                            " keeping the previously cached telemetry rather than"
+                            " replacing it with a partial parse."
                         )
                         return
                     return await self._process_telemetry(parameters)
