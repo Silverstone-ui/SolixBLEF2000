@@ -4,9 +4,11 @@ Covers the control-command byte wiring (AC/DC output, power saving mode,
 light bar mode), and regression tests for power_out/ac_output_power - both
 were re-pointed after a live-hardware session found offset 17-18 (the
 previous power_out location) doesn't track real output power, while offset
-41 (AC + light bar) and offset 21 (AC only) do, confirmed against the
-unit's own screen. See docs/source/f2000_hardware_variant.rst for the full
-writeup.
+41-42 (AC + light bar) and offset 21-22 (AC only) do, confirmed against the
+unit's own screen. Both were originally read as single bytes; a third-party
+report (independently-built library plus direct hardware confirmation)
+identified them as 16-bit LE fields, silently wrong above 255W. See
+docs/source/f2000_hardware_variant.rst for the full writeup.
 """
 
 from unittest import mock
@@ -24,25 +26,29 @@ _TELEMETRY_LENGTH = 102
 
 
 def _telemetry_frame(
-    ac_power: int = 65, combined_power: int = 68, legacy_power_out: int = 12345
+    ac_power: int = 300, combined_power: int = 400, legacy_power_out: int = 12345
 ) -> bytes:
     """Build a base telemetry frame with recognizable, distinct probe values.
 
-    :param ac_power: Value at offset 21 (single byte) - AC-only output
-        power, read by :attr:`F2000Alt.ac_output_power`.
-    :param combined_power: Value at offset 41 (single byte) - AC + light bar
+    :param ac_power: Value at offset 21-22 (LE16) - AC-only output power,
+        read by :attr:`F2000Alt.ac_output_power`. Defaults above 255 to
+        prove the field is genuinely read as 16-bit, not truncated to a
+        single byte (a real bug this project shipped and a third-party
+        library/report caught - see the offset 21/41 note in
+        f2000_alt.py's power_out docstring).
+    :param combined_power: Value at offset 41-42 (LE16) - AC + light bar
         combined output power, read by :attr:`F2000Alt.power_out`. Kept
         distinct from ``ac_power`` so the two properties can't accidentally
-        pass by reading the same byte.
+        pass by reading the same bytes, and also defaults above 255.
     :param legacy_power_out: Value at offset 17-18 (LE16) - the field
         power_out used to read before a live-hardware test found it doesn't
-        track real output power. Kept large and outside single-byte range
+        track real output power. Kept large and distinct from the other two
         so a regression back to reading it would be caught.
     """
     frame = bytearray(_TELEMETRY_LENGTH)
     frame[17:19] = legacy_power_out.to_bytes(2, "little")
-    frame[21] = ac_power
-    frame[41] = combined_power
+    frame[21:23] = ac_power.to_bytes(2, "little")
+    frame[41:43] = combined_power.to_bytes(2, "little")
     return bytes(frame)
 
 
@@ -87,25 +93,47 @@ async def _connected_device(
 
 @pytest.mark.asyncio
 async def test_power_out_reads_offset_41_not_17_18():
-    """power_out (AC + light bar combined) must read offset 41, not 17-18."""
+    """power_out (AC + light bar combined) must read offset 41-42, not 17-18."""
     async with MockDevice() as mock_bluetooth:
         device = await _connected_device(
             mock_bluetooth,
-            _telemetry_frame(ac_power=65, combined_power=68, legacy_power_out=12345),
+            _telemetry_frame(ac_power=300, combined_power=400, legacy_power_out=12345),
         )
-        assert device.power_out == 68
+        assert device.power_out == 400
 
 
 @pytest.mark.asyncio
 async def test_ac_output_power_reads_offset_21():
-    """ac_output_power (AC only) must read offset 21, distinct from power_out."""
+    """ac_output_power (AC only) must read offset 21-22, distinct from power_out."""
     async with MockDevice() as mock_bluetooth:
         device = await _connected_device(
             mock_bluetooth,
-            _telemetry_frame(ac_power=65, combined_power=68, legacy_power_out=12345),
+            _telemetry_frame(ac_power=300, combined_power=400, legacy_power_out=12345),
         )
-        assert device.ac_output_power == 65
+        assert device.ac_output_power == 300
         assert device.ac_output_power != device.power_out
+
+
+@pytest.mark.asyncio
+async def test_ac_output_power_and_power_out_are_16_bit_not_truncated():
+    """Regression test: these fields must not silently wrap/truncate above 255W.
+
+    Both were originally implemented as single-byte reads. A third-party
+    owner's independently-built library documented offset 21-22 as a 16-bit
+    field, and directly confirmed on their own hardware that values above
+    255W were being misread - see the note on F2000Alt.power_out. A
+    single-byte read of a value like 300 would either raise (bytearray
+    assignment rejects values > 255) or silently produce a wrong, wrapped
+    result depending on how it was truncated - this test locks in that a
+    real value clearly above 255 round-trips exactly.
+    """
+    async with MockDevice() as mock_bluetooth:
+        device = await _connected_device(
+            mock_bluetooth,
+            _telemetry_frame(ac_power=65535, combined_power=65534, legacy_power_out=1),
+        )
+        assert device.ac_output_power == 65535
+        assert device.power_out == 65534
 
 
 @pytest.mark.asyncio

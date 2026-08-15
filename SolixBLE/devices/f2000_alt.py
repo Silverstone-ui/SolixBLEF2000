@@ -320,12 +320,22 @@ class F2000Alt(SolixBLEDevice):
             Does **not** include DC/car-socket output - a real DC load left
             this value unchanged in testing. There is currently no known
             field that sums every output (AC + DC + light + USB); this is
-            the closest available approximation. Also single-byte (max 255W)
-            unlike offset 17-18's LE16 - a high-wattage AC load could wrap.
+            the closest available approximation.
+
+        .. note::
+            Read as a single byte (max 255W) until a community report
+            (a third-party owner's independently-verified library plus
+            direct confirmation on their own hardware - see GitHub issue
+            tracker) identified this as a 16-bit LE field at offset 41-42,
+            matching the sibling field at offset 21-22. All values observed
+            during this project's own live testing were under 100W, so the
+            high byte (42) was always 0 and the single-byte read happened
+            to produce the same result - meaning this was silently wrong
+            for any load at or above 256W, not caught by testing so far.
 
         :returns: AC + light bar power out or default int value.
         """
-        return self._byte(41)
+        return self._le16(41)
 
     @property
     def ac_output_power(self) -> int:
@@ -337,9 +347,17 @@ class F2000Alt(SolixBLEDevice):
         include DC/car-socket or light bar output. See
         :doc:`/f2000_hardware_variant` for the full writeup.
 
+        .. note::
+            Read as a single byte (max 255W) until a community report
+            identified this as a 16-bit LE field spanning offset 21-22 -
+            see the note on :attr:`power_out` for the full story. All
+            values observed during this project's own live testing were
+            under 100W, so this was silently wrong above 256W without
+            being caught by testing so far.
+
         :returns: AC output power or default int value.
         """
-        return self._byte(21)
+        return self._le16(21)
 
     @property
     def ac_power_in(self) -> int:

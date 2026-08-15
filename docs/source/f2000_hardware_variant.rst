@@ -141,22 +141,31 @@ Firmware version                        47 (duplicated at 61)            Single 
                                                                           :attr:`SolixBLE.F2000.software_version` in
                                                                           the standard protocol. See
                                                                           :ref:`f2000_variant_firmware`.
-AC output power (W)                     21, single byte                  Live-hardware re-test (AC fan load, cross-
+AC output power (W)                     21-22, LE16                     Live-hardware re-test (AC fan load, cross-
                                                                           checked against the unit's own screen) found
                                                                           this matches the displayed wattage within 1W,
                                                                           and is unaffected by light bar changes - used
                                                                           by :attr:`~SolixBLE.F2000Alt.ac_output_power`.
-                                                                          Single byte, so values above 255W would wrap
-                                                                          (not observed with the loads tested). A
-                                                                          DC-only load left this at 0. Previously
-                                                                          thought to always read 0 - that was only
-                                                                          true because that earlier test had AC off.
-AC + light bar output power (W)         41, single byte                  Same re-test found this equals offset 21 plus
+                                                                          Originally implemented as a single byte
+                                                                          (loads tested were all under 100W, so this
+                                                                          wasn't caught) - a third-party owner's
+                                                                          independently-built library documented this
+                                                                          as 16-bit LE, and confirmed on their own
+                                                                          hardware that values above 255W were being
+                                                                          misread. Fixed to LE16. A DC-only load left
+                                                                          this at 0. Previously thought to always read
+                                                                          0 - that was only true because that earlier
+                                                                          test had AC off.
+AC + light bar output power (W)         41-42, LE16                     Same re-test found this equals offset 21 plus
                                                                           the light bar's own draw (+2W low, +3W medium,
                                                                           +4W high) - used by
                                                                           :attr:`~SolixBLE.F2000Alt.power_out`. A
                                                                           DC-only load left this unchanged too, so it
                                                                           does not include DC/car-socket output.
+                                                                          Originally implemented as a single byte, same
+                                                                          as offset 21 above and for the same reason
+                                                                          (loads tested were under 100W) - fixed to
+                                                                          LE16 alongside it.
                                                                           Previously documented as a light-bar status
                                                                           enum (off=0, low=2, medium=3, high=4) - that
                                                                           was a coincidental misread: the light-sweep
@@ -323,24 +332,24 @@ Light bar mode           ``0x8b``     Matches :class:`~SolixBLE.states.LightStat
                                       ``3``\=high, ``4``\=SOS. Confirmed live end-to-end
                                       via :meth:`~SolixBLE.F2000Alt.set_light_mode`
                                       against real hardware. The original test for this
-                                      cycled low/medium/high/off and observed offset 41 in
+                                      cycled low/medium/high/off and observed offset 41-42 in
                                       the base frame track each change (low=2, medium=3,
                                       high=4, off=0), which was read at the time as a
                                       light-bar status enum. A later re-test with an AC
-                                      load also running found offset 41 = AC output power
-                                      (offset 21) **plus** those same +2/+3/+4 values — so
+                                      load also running found offset 41-42 = AC output power
+                                      (offset 21-22) **plus** those same +2/+3/+4 values — so
                                       the original test's numbers were real power draw
                                       (watts) from the light bar itself, not a status code;
-                                      offset 41 just happened to equal the light's own
+                                      offset 41-42 just happened to equal the light's own
                                       wattage because AC was off at the time, making it look
                                       like a clean enum. The actual light-bar mode readback
                                       is offset 118 in the settings block (see above), which
-                                      is unrelated to offset 41. SOS was re-tested twice: a
+                                      is unrelated to offset 41-42. SOS was re-tested twice: a
                                       live ~15s raw-frame log while the light visibly blinked
-                                      produced no distinguishable offset 41 value at that
+                                      produced no distinguishable offset 41-42 value at that
                                       polling rate; a later real HCI-snoop capture of the
                                       official app (full/unfiltered, not rate-limited by
-                                      polling) resolved this - offset 41 settles to a
+                                      polling) resolved this - offset 41-42 settles to a
                                       **steady** value equal to LOW's (2), not an alternating
                                       one, for the whole SOS window. Most likely explanation:
                                       whatever this field samples/averages, SOS's effective
@@ -386,11 +395,13 @@ Known unknowns
 - **Time to full charge** — the app displays this, but it is not the same field as "time
   remaining" (byte 57-58 stays fixed at its last discharge estimate while charging). Not
   located.
-- Bytes 8-16, 22, 24, 26, 28, 30, 32-36, 42-46, 59-60, 62, 64, 67, 69, 71, 73-74, 82-84 —
+- Bytes 8-16, 24, 26, 28, 30, 32-36, 43-46, 59-60, 62, 64, 67, 69, 71, 73-74, 82-84 —
   read as ``0`` in every test performed. Either unused/reserved, or fields for states not
   yet triggered (e.g. battery health %, expansion battery data, per-port negotiated
-  voltage/current, error/fault codes). Offset 21 has since been identified (AC output power)
-  and moved out of this list — see the field map above.
+  voltage/current, error/fault codes). Offsets 21 (AC output power) and 41 (AC + light bar
+  output power) have since been identified as 16-bit LE fields — 22 and 42 were their high
+  bytes, always ``0`` because loads tested so far stayed under 256W, not actually
+  unused/reserved — and both offsets have moved out of this list; see the field map above.
 - What offset 17-18 (LE16) actually represents is unidentified — see the field map above.
   It moves in response to load (startup-inrush-then-settle pattern) but does not match real
   output power in either magnitude or behavior, so it's tracking *something* real, just not

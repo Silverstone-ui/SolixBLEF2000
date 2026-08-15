@@ -3,6 +3,18 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.1] - 2026-08-15
+
+### Fixed
+
+- `F2000Alt.ac_output_power` and `F2000Alt.power_out` were reading offset 21 and 41 as
+  single bytes (max 255W each), silently wrapping/misreading any AC or combined load at
+  or above 256W. Both are 16-bit little-endian fields spanning offset 21-22 and 41-42
+  respectively. All values seen during this project's own live testing were under 100W,
+  so the bug went uncaught until a community member (`impala454`, cross-referencing an
+  independently-built third-party library) reported and confirmed it on their own
+  hardware — see issue #8.
+
 ## [3.9.0] - 2026-07-20
 
 ### Added
