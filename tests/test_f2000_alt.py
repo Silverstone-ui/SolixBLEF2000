@@ -137,6 +137,50 @@ async def test_ac_output_power_and_power_out_are_16_bit_not_truncated():
 
 
 @pytest.mark.asyncio
+async def test_port_and_misc_power_fields_are_16_bit_not_truncated():
+    """Regression test: per-port and misc power fields must not truncate above 255W.
+
+    usb_c1/c2/c3_power and usb_a1/a2_power were originally read as single
+    bytes - the same bug class as ac_output_power/power_out (see module
+    docstring), discovered this session by cross-referencing a third-party
+    library's field map rather than a live report, and fixed alongside it.
+    dc1/dc2_power, solar_power_in, and power_in are new fields added at the
+    same time from the same source, not yet confirmed against live
+    hardware. All are 16-bit LE at their respective offsets; the battery
+    fields (external/total percentage, external temperature) are single
+    bytes as documented.
+    """
+    frame = bytearray(_TELEMETRY_LENGTH)
+    frame[23:25] = (1001).to_bytes(2, "little")  # usb_c1_power
+    frame[25:27] = (1002).to_bytes(2, "little")  # usb_c2_power
+    frame[27:29] = (1003).to_bytes(2, "little")  # usb_c3_power
+    frame[29:31] = (1004).to_bytes(2, "little")  # usb_a1_power
+    frame[31:33] = (1005).to_bytes(2, "little")  # usb_a2_power
+    frame[33:35] = (1006).to_bytes(2, "little")  # dc1_power
+    frame[35:37] = (1007).to_bytes(2, "little")  # dc2_power
+    frame[37:39] = (1008).to_bytes(2, "little")  # solar_power_in
+    frame[39:41] = (1009).to_bytes(2, "little")  # power_in
+    frame[67] = 45  # external_battery_temperature
+    frame[71] = 55  # external_battery_percentage
+    frame[72] = 66  # total_battery_percentage
+
+    async with MockDevice() as mock_bluetooth:
+        device = await _connected_device(mock_bluetooth, bytes(frame))
+        assert device.usb_c1_power == 1001
+        assert device.usb_c2_power == 1002
+        assert device.usb_c3_power == 1003
+        assert device.usb_a1_power == 1004
+        assert device.usb_a2_power == 1005
+        assert device.dc1_power == 1006
+        assert device.dc2_power == 1007
+        assert device.solar_power_in == 1008
+        assert device.power_in == 1009
+        assert device.external_battery_temperature == 45
+        assert device.external_battery_percentage == 55
+        assert device.total_battery_percentage == 66
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "raw_value,expected",
     [

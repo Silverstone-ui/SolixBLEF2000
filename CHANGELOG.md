@@ -3,6 +3,34 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.2] - 2026-08-15
+
+### Added
+
+- `F2000Alt.solar_power_in` — solar input power (offset 37-38). Not yet confirmed
+  against a live solar load on this project's own hardware.
+- `F2000Alt.power_in` — total input power, all sources combined (offset 39-40).
+  Previously assumed to duplicate `ac_power_in`; a third-party library documents it
+  as a distinct field, indistinguishable from `ac_power_in` in every test run here
+  so far because solar was never connected.
+- `F2000Alt.dc1_power` / `F2000Alt.dc2_power` — per-port DC/car-socket output power
+  (offset 33-34 / 35-36).
+- `F2000Alt.external_battery_percentage` / `F2000Alt.total_battery_percentage` /
+  `F2000Alt.external_battery_temperature` — expansion-battery fields (offset 71,
+  72, 67). Not confirmed on this project's own hardware (no expansion battery
+  available to test with).
+
+All of the above are cross-referenced from a third-party independently-built
+library's field map, the same source that identified the `ac_output_power`/
+`power_out` 16-bit LE bug fixed in 3.9.1.
+
+### Fixed
+
+- `F2000Alt.usb_c1_power`/`usb_c2_power`/`usb_c3_power`/`usb_a1_power`/`usb_a2_power`
+  had the same single-byte-vs-16-bit-LE bug as `ac_output_power`/`power_out` (fixed
+  in 3.9.1) — found this session while cross-referencing the third-party library
+  above, before any load actually triggered it in practice.
+
 ## [3.9.1] - 2026-08-15
 
 ### Fixed

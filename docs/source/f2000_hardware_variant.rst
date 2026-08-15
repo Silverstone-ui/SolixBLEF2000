@@ -209,11 +209,56 @@ DC/Car socket output on/off             80, 81                           Both fl
                                                                           only tested as a combined pair (this unit
                                                                           has two physical Car socket ports — not
                                                                           yet tested individually).
-USB-C port power (W) — port A           23
-USB-C port power (W) — middle           25
-USB-C port power (W) — bottom           27
-USB-A port power (W) — top              29
-USB-A port power (W) — bottom           31
+DC/Car socket port power (W) — port 1   33-34, LE16                     Cross-referenced from a third-party
+                                                                          independently-built library (same source
+                                                                          as the offset 21/41 fix), not yet confirmed
+                                                                          against a live DC load on this project's
+                                                                          own hardware — used by
+                                                                          :attr:`~SolixBLE.F2000Alt.dc1_power`.
+DC/Car socket port power (W) — port 2   35-36, LE16                     Same source/caveat as port 1 above — used by
+                                                                          :attr:`~SolixBLE.F2000Alt.dc2_power`.
+Solar input power (W)                   37-38, LE16                     Same source/caveat as the DC port rows above
+                                                                          — used by
+                                                                          :attr:`~SolixBLE.F2000Alt.solar_power_in`.
+                                                                          Read 0 in every capture taken so far
+                                                                          (battery pinned at 100%, so the charge
+                                                                          controller had no current to report
+                                                                          regardless of panel output) — genuinely
+                                                                          unconfirmed, not just untested.
+Total input power (W), all sources      39-40, LE16                     Previously assumed to duplicate offset
+combined                                                                 19-20 (AC input) because they always
+                                                                          matched in testing — the same source above
+                                                                          documents this as a distinct "AC + solar
+                                                                          combined" field. Every test here so far had
+                                                                          solar disconnected, which would make the
+                                                                          two indistinguishable either way — not yet
+                                                                          confirmed with solar actually connected.
+External/expansion battery temp (°C)    67                               Cross-referenced from the same third-party
+                                                                          source, not yet confirmed — no expansion
+                                                                          battery available to test with. Used by
+                                                                          :attr:`~SolixBLE.F2000Alt.external_battery_temperature`.
+External/expansion battery %            71                               Same source/caveat as above — used by
+                                                                          :attr:`~SolixBLE.F2000Alt.external_battery_percentage`.
+                                                                          Read 0 in every capture so far, consistent
+                                                                          with no expansion battery attached.
+Total battery % (main + expansion)      72                               Same source — used by
+                                                                          :attr:`~SolixBLE.F2000Alt.total_battery_percentage`.
+                                                                          Matched :attr:`battery_percentage` (100) in
+                                                                          every capture so far, consistent with a
+                                                                          single-battery unit, though not a live
+                                                                          confirmation of the offset itself.
+USB-C port power (W) — port A           23-24, LE16                     Read as a single byte (max 255W) until
+                                                                          this session cross-referenced the same
+                                                                          third-party source and found the high byte
+                                                                          (24) always read 0 in every reserved-byte
+                                                                          sweep — the same silent-truncation pattern
+                                                                          as the offset 21/41 bug. Fixed proactively;
+                                                                          not yet independently confirmed with a load
+                                                                          above 255W on this project's own hardware.
+USB-C port power (W) — middle           25-26, LE16                     Same fix/caveat as port A above.
+USB-C port power (W) — bottom           27-28, LE16                     Same fix/caveat as port A above.
+USB-A port power (W) — top              29-30, LE16                     Same fix/caveat as port A above.
+USB-A port power (W) — bottom           31-32, LE16                     Same fix/caveat as port A above.
 USB-C port active — port A              75
 USB-C port active — middle              76
 USB-C port active — bottom              77
@@ -395,13 +440,16 @@ Known unknowns
 - **Time to full charge** — the app displays this, but it is not the same field as "time
   remaining" (byte 57-58 stays fixed at its last discharge estimate while charging). Not
   located.
-- Bytes 8-16, 24, 26, 28, 30, 32-36, 43-46, 59-60, 62, 64, 67, 69, 71, 73-74, 82-84 —
-  read as ``0`` in every test performed. Either unused/reserved, or fields for states not
-  yet triggered (e.g. battery health %, expansion battery data, per-port negotiated
-  voltage/current, error/fault codes). Offsets 21 (AC output power) and 41 (AC + light bar
-  output power) have since been identified as 16-bit LE fields — 22 and 42 were their high
-  bytes, always ``0`` because loads tested so far stayed under 256W, not actually
-  unused/reserved — and both offsets have moved out of this list; see the field map above.
+- Bytes 8-16, 43-46, 59-60, 62, 64, 69, 73-74, 82-84 — read as ``0`` in every test
+  performed. Either unused/reserved, or fields for states not yet triggered (e.g.
+  per-port negotiated voltage/current, error/fault codes). Offsets 21/41 (AC output /
+  AC + light bar power), 24/26/28/30/32 (USB port power high bytes), 33-36 (DC port
+  power), 37-38 (solar input), 39-40 (total input), 67 (external battery temp), and 71
+  (external battery %) have all since been identified — see the field map above — and
+  moved out of this list. All of them read ``0`` in every capture taken so far for the
+  same underlying reason: either a high byte that's genuinely 0 below 256W, or a field
+  with nothing to report yet (no solar current flowing at 100% battery, no expansion
+  battery attached) — not evidence the offsets themselves are wrong.
 - What offset 17-18 (LE16) actually represents is unidentified — see the field map above.
   It moves in response to load (startup-inrush-then-settle pattern) but does not match real
   output power in either magnitude or behavior, so it's tracking *something* real, just not

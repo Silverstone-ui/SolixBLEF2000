@@ -275,12 +275,50 @@ class F2000Alt(SolixBLEDevice):
         return self._byte(70)
 
     @property
+    def external_battery_percentage(self) -> int:
+        """Expansion/external battery percentage, if one is attached.
+
+        .. note::
+            Offset cross-referenced from a third-party independently-built
+            library, not yet confirmed on this project's own hardware (no
+            expansion battery available to test with).
+
+        :returns: External battery percentage or default int value.
+        """
+        return self._byte(71)
+
+    @property
+    def total_battery_percentage(self) -> int:
+        """Combined battery percentage across main + any expansion battery.
+
+        .. note::
+            Offset cross-referenced from a third-party independently-built
+            library, not yet confirmed on this project's own hardware.
+
+        :returns: Total battery percentage or default int value.
+        """
+        return self._byte(72)
+
+    @property
     def temperature(self) -> int:
         """Temperature of the unit (C).
 
         :returns: Temperature of the unit in degrees C or default int value.
         """
         return self._byte(66)
+
+    @property
+    def external_battery_temperature(self) -> int:
+        """Expansion/external battery temperature (C), if one is attached.
+
+        .. note::
+            Offset cross-referenced from a third-party independently-built
+            library, not yet confirmed on this project's own hardware (no
+            expansion battery available to test with).
+
+        :returns: External battery temperature or default int value.
+        """
+        return self._byte(67)
 
     @property
     def software_version(self) -> str:
@@ -366,6 +404,38 @@ class F2000Alt(SolixBLEDevice):
         :returns: AC power in or default int value.
         """
         return self._le16(19)
+
+    @property
+    def solar_power_in(self) -> int:
+        """Solar input power (watts).
+
+        .. note::
+            Offset cross-referenced from a third-party independently-built
+            library (the same source that identified the offset 21/41
+            16-bit LE bug - see the note on :attr:`power_out`), not yet
+            confirmed against an actual solar load on this project's own
+            hardware.
+
+        :returns: Solar power in or default int value.
+        """
+        return self._le16(37)
+
+    @property
+    def power_in(self) -> int:
+        """Total input power, all sources combined (watts).
+
+        .. note::
+            This project's docs previously assumed this offset duplicated
+            :attr:`ac_power_in` (offset 19-20), because they always matched
+            in testing - a third-party library instead documents this as a
+            genuinely distinct "total input" field (AC + solar combined).
+            Every test run here so far had solar disconnected, which would
+            make the two indistinguishable either way - not yet confirmed
+            with solar actually connected on this project's own hardware.
+
+        :returns: Total power in or default int value.
+        """
+        return self._le16(39)
 
     @property
     def time_remaining(self) -> float:
@@ -484,6 +554,32 @@ class F2000Alt(SolixBLEDevice):
         return PortStatus(value)
 
     @property
+    def dc1_power(self) -> int:
+        """DC/Car socket port 1 power (watts).
+
+        .. note::
+            Offset cross-referenced from a third-party independently-built
+            library, not yet confirmed against a live DC load on this
+            project's own hardware.
+
+        :returns: DC port 1 power or default int value.
+        """
+        return self._le16(33)
+
+    @property
+    def dc2_power(self) -> int:
+        """DC/Car socket port 2 power (watts).
+
+        .. note::
+            Offset cross-referenced from a third-party independently-built
+            library, not yet confirmed against a live DC load on this
+            project's own hardware.
+
+        :returns: DC port 2 power or default int value.
+        """
+        return self._le16(35)
+
+    @property
     def usb_port_c1(self) -> PortStatus:
         """USB-C port 1 status.
 
@@ -502,9 +598,20 @@ class F2000Alt(SolixBLEDevice):
     def usb_c1_power(self) -> int:
         """USB-C port 1 power (watts).
 
+        .. note::
+            Read as a single byte (max 255W) until this session cross-
+            referenced a third-party library's field map (the same source
+            that identified the offset 21/41 bug - see the note on
+            :attr:`power_out`) and found this offset pair documented as
+            16-bit LE. The high byte (24) was always 0 in every reserved-
+            byte sweep performed so far - the exact same silent-truncation
+            pattern as the confirmed offset 21/41 bug - so fixed
+            proactively, though not yet independently confirmed with a
+            load above 255W on this project's own hardware.
+
         :returns: USB-C 1 power or default int value.
         """
-        return self._byte(23)
+        return self._le16(23)
 
     @property
     def usb_port_c2(self) -> PortStatus:
@@ -521,9 +628,13 @@ class F2000Alt(SolixBLEDevice):
     def usb_c2_power(self) -> int:
         """USB-C port 2 (middle) power (watts).
 
+        .. note::
+            Same single-byte -> 16-bit LE fix as :attr:`usb_c1_power` - see
+            its note for the full story.
+
         :returns: USB-C 2 power or default int value.
         """
-        return self._byte(25)
+        return self._le16(25)
 
     @property
     def usb_port_c3(self) -> PortStatus:
@@ -540,9 +651,13 @@ class F2000Alt(SolixBLEDevice):
     def usb_c3_power(self) -> int:
         """USB-C port 3 (bottom) power (watts).
 
+        .. note::
+            Same single-byte -> 16-bit LE fix as :attr:`usb_c1_power` - see
+            its note for the full story.
+
         :returns: USB-C 3 power or default int value.
         """
-        return self._byte(27)
+        return self._le16(27)
 
     @property
     def usb_port_a1(self) -> PortStatus:
@@ -559,9 +674,13 @@ class F2000Alt(SolixBLEDevice):
     def usb_a1_power(self) -> int:
         """USB-A port 1 (top) power (watts).
 
+        .. note::
+            Same single-byte -> 16-bit LE fix as :attr:`usb_c1_power` - see
+            its note for the full story.
+
         :returns: USB-A 1 power or default int value.
         """
-        return self._byte(29)
+        return self._le16(29)
 
     @property
     def usb_port_a2(self) -> PortStatus:
@@ -578,9 +697,13 @@ class F2000Alt(SolixBLEDevice):
     def usb_a2_power(self) -> int:
         """USB-A port 2 (bottom) power (watts).
 
+        .. note::
+            Same single-byte -> 16-bit LE fix as :attr:`usb_c1_power` - see
+            its note for the full story.
+
         :returns: USB-A 2 power or default int value.
         """
-        return self._byte(31)
+        return self._le16(31)
 
     @property
     def serial_number(self) -> str:
