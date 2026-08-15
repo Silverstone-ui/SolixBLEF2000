@@ -195,22 +195,31 @@ AC input power while charging (W)       19-20, LE16                     Only non
                                                                           39-40 is AC + solar combined, not a
                                                                           duplicate, they only matched because every
                                                                           earlier test had solar disconnected.
-Time remaining — discharge (hours)      57-58, LE16                     **Confirmed unreliable — do not trust.**
-                                                                          Found completely frozen at the same raw
-                                                                          value (819) across 5 very different live
-                                                                          conditions in one session (load 67W-287W,
-                                                                          battery 100%->99%, solar 0W-303W), while
-                                                                          the unit's own screen moved a lot
-                                                                          (16.4h -> 7h) over the same period. Not a
-                                                                          divisor problem — the ``value ÷ 10``
-                                                                          convention (removed above) never mattered,
-                                                                          the underlying byte itself doesn't move.
-                                                                          Either stale/cached data this library's
-                                                                          poll never refreshes, or the official app
-                                                                          computes its own ETA client-side instead of
-                                                                          reading a transmitted field. Excluded from
-                                                                          HaSolixBLE's sensors for this device type
-                                                                          until solved. Also does **not** update for
+Time remaining — discharge (hours)      17 (hours, ÷10) +               **Fixed — was reading the wrong offset
+                                         18 (whole days), both           entirely.** Previously read offset 57-58
+                                         single bytes                    as a 16-bit LE value, which was found
+                                                                          completely frozen at the same raw value
+                                                                          across 5 very different live conditions in
+                                                                          one session (load 67W-287W, battery
+                                                                          100%->99%, solar 0W-303W), while the
+                                                                          unit's own screen moved a lot (16.4h -> 7h)
+                                                                          over the same period — the real field lives
+                                                                          elsewhere. An independent third-party
+                                                                          implementation (a separate open-source HA
+                                                                          integration for this exact device) reads
+                                                                          offset 17 as hours (value ÷ 10) and offset
+                                                                          18 as whole days — both single bytes, not
+                                                                          related to offset 17-18 as a combined LE16
+                                                                          pair (a different, still-unidentified
+                                                                          field — see the note below the table).
+                                                                          Verified against three live readings this
+                                                                          session, paired with the unit's own screen
+                                                                          at that exact moment: 16.5h (exact match),
+                                                                          7.0h (exact match), 16.6h vs the screen's
+                                                                          16.4h (small tolerance, same margin seen
+                                                                          elsewhere in this project). Re-added to
+                                                                          `HaSolixBLE`'s sensors now that it's
+                                                                          confirmed. Still does **not** update for
                                                                           "time to full charge" while charging — that
                                                                           field is not yet located either.
 AC output on/off                        63                               0/1.
@@ -475,12 +484,19 @@ Known unknowns
   taken so far for the same underlying reason: either a high byte that's genuinely 0
   below 256W, or a field with nothing to report yet (no expansion battery attached) —
   not evidence the offsets themselves are wrong.
-- What offset 17-18 (LE16) actually represents is unidentified — see the field map above.
-  It moves in response to load (startup-inrush-then-settle pattern) but does not match real
-  output power in either magnitude or behavior, so it's tracking *something* real, just not
-  power output.
-- Fixed constant bytes 47, 49, 51, 53, 61, 72 — never observed to change; purpose unknown
-  (possibly a device/model/protocol-version identifier).
+- What offset 17-18 (LE16, i.e. read as one combined 16-bit value) actually represents is
+  still unidentified — see the field map above. It moves in response to load
+  (startup-inrush-then-settle pattern) but does not match real output power in either
+  magnitude or behavior. Likely explanation, given offset 17 and offset 18 were separately
+  identified this session as the real hours-remaining/days-remaining fields (see the "Time
+  remaining" row above): a combined LE16 read of those same two bytes would naturally track
+  *something* real (a discharge-time estimate that legitimately changes with load) without
+  meaning anything as a single 16-bit number — this note predates that finding and is kept
+  for the historical record, not because the mystery independently reproduces elsewhere.
+- Fixed constant bytes 47, 49, 51, 53, 61 — never observed to change; purpose unknown
+  (possibly a device/model/protocol-version identifier). Byte 72 was previously listed here
+  too — since identified as :attr:`~SolixBLE.F2000Alt.total_battery_percentage`, see the
+  field map above.
 - Settings block bytes 103, 107, 109, 111, 116 — see above.
 - The two Car socket outputs (bytes 80/81) have only been observed as a pair, never
   independently. They are now confirmed to flip together 0/1 with DC/Car socket output

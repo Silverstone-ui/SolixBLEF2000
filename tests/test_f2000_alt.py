@@ -181,6 +181,47 @@ async def test_port_and_misc_power_fields_are_16_bit_not_truncated():
 
 
 @pytest.mark.asyncio
+async def test_time_remaining_reads_offset_17_and_18_as_separate_bytes():
+    """Regression test: time_remaining must read two single bytes, not a 16-bit pair.
+
+    Previously read offset 57-58 as a 16-bit LE value, which was found
+    completely frozen across wildly different live conditions in one
+    session, while the unit's own screen moved a lot. An independent
+    third-party implementation (a separate open-source HA integration for
+    this exact device) reads offset 17 as hours (value/10, single byte) and
+    offset 18 as whole days (single byte) instead - not the same offsets as
+    a combined LE16 pair, which is a different, still-unidentified field
+    (see legacy_power_out in _telemetry_frame's docstring). The exact raw
+    byte 0xa5 (165) below is taken directly from a live capture this
+    session that paired with the unit's own screen reading 16.5 hours at
+    that exact moment - an exact match, not an approximation.
+    """
+    frame = bytearray(_TELEMETRY_LENGTH)
+    frame[17] = 0xA5  # 165 -> 16.5 hours, matches a live-captured screen reading
+    frame[18] = 0  # 0 days
+
+    async with MockDevice() as mock_bluetooth:
+        device = await _connected_device(mock_bluetooth, bytes(frame))
+        assert device.time_remaining == 16.5
+        assert device.hours_remaining == 16.5
+        assert device.days_remaining == 0
+
+
+@pytest.mark.asyncio
+async def test_time_remaining_includes_days():
+    """time_remaining must fold whole days (offset 18) into the total hours."""
+    frame = bytearray(_TELEMETRY_LENGTH)
+    frame[17] = 100  # 10.0 hours
+    frame[18] = 3  # 3 days
+
+    async with MockDevice() as mock_bluetooth:
+        device = await _connected_device(mock_bluetooth, bytes(frame))
+        assert device.time_remaining == 82.0  # 3 * 24 + 10.0
+        assert device.hours_remaining == 10.0
+        assert device.days_remaining == 3
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "raw_value,expected",
     [

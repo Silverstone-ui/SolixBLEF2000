@@ -444,20 +444,22 @@ class F2000Alt(SolixBLEDevice):
     def time_remaining(self) -> float:
         """Time remaining to empty, on battery discharge, in hours.
 
-        .. warning::
-            **Confirmed unreliable for this hardware variant - do not trust
-            this value.** Offset 57-58 was found completely frozen at the
-            same raw value across 5 very different live conditions in one
-            session (load swinging 67W-287W, battery 100%->99%, solar
-            0W-303W), while the unit's own screen moved a lot (16.4h -> 7h)
-            over the same period. Either this offset is stale/cached data
-            never refreshed by this library's poll, or the official app
-            computes its own ETA client-side (from raw energy + current
-            load) rather than reading a transmitted field, and this offset
-            means something else entirely. Not fixed by any divisor change
-            - the underlying byte itself doesn't move. Excluded from
-            HaSolixBLE's sensors for this device type until actually
-            solved - see :doc:`/f2000_hardware_variant`.
+        .. note::
+            **Fixed - was reading the wrong offset entirely.** Previously
+            read offset 57-58 as a 16-bit LE value, which was found
+            completely frozen across wildly different live conditions in
+            one session (load 67W-287W, battery 100%->99%, solar 0W-303W)
+            while the unit's own screen moved a lot (16.4h -> 7h). An
+            independent third-party implementation (a separate open-source
+            HA integration for this exact device) reads this field as two
+            *single bytes*: offset 17 (hours, value/10) and offset 18
+            (whole days) - not related to offset 17-18 as a combined LE16
+            pair, which is a different, still-unidentified field. Verified
+            against three live readings captured earlier this session,
+            paired with the unit's own screen at that exact moment: 16.5h
+            (exact match), 7.0h (exact match), and 16.6h vs the screen's
+            16.4h (same small tolerance seen elsewhere in this project).
+            See :doc:`/f2000_hardware_variant` for the full writeup.
 
         .. note::
             This does not reflect "time to full charge" while charging - it
@@ -466,10 +468,11 @@ class F2000Alt(SolixBLEDevice):
 
         :returns: Hours remaining or default float value.
         """
-        raw = self._le16(57)
-        if raw == DEFAULT_METADATA_INT:
+        hours = self._byte(17)
+        days = self._byte(18)
+        if hours == DEFAULT_METADATA_INT or days == DEFAULT_METADATA_INT:
             return DEFAULT_METADATA_FLOAT
-        return round(raw / 10.0, 1)
+        return round(days * 24 + hours / 10.0, 1)
 
     @property
     def hours_remaining(self) -> float:

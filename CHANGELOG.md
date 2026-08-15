@@ -3,6 +3,37 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.6] - 2026-08-15
+
+### Fixed
+
+- `F2000Alt.time_remaining` (and `hours_remaining`/`days_remaining`/`timestamp_remaining`,
+  all downstream of it) now read the correct offsets. Previously read offset 57-58 as a
+  16-bit LE value, which was found completely frozen across wildly different live
+  conditions in one session while the unit's own screen moved a lot — documented as
+  unreliable in 3.9.4. Root cause found by cross-referencing an independent third-party
+  open-source HA integration for this exact device (`yun-s-oh/ha-anker-solix-f2000`),
+  which reads this as two separate single bytes: offset 17 (hours, value/10) and offset
+  18 (whole days) — not the same offsets read as a combined 16-bit pair. Verified against
+  three live readings from earlier this session, paired with the unit's own screen at that
+  exact moment: two exact matches (16.5h, 7.0h) and one close match (16.6h vs 16.4h, same
+  small tolerance seen elsewhere in this project).
+
+## [3.9.5] - 2026-08-15
+
+### Fixed
+
+- Cherry-picked 5 reliability/logging commits from `javier-omar/SolixBLEF2000` (a sibling
+  fork of this project, itself forked from `flip-dots/SolixBLE`): malformed telemetry
+  packets no longer overwrite good cached data, unknown/undecodable message types log at
+  debug instead of error+traceback, and the background reconnect loop backs off less
+  aggressively while logging quietly instead of flooding errors on every retry. Verified
+  with a full test-suite run before merging (no regressions; one pre-existing flaky test
+  confirmed unrelated by reproducing it on `main` before these changes too). Two of the
+  five directly benefit `F2000Alt` (it inherits the shared reconnect loop); the other
+  three touch the base encrypted-protocol parser, which `F2000Alt` doesn't use, but still
+  improve the library for every other device class it supports.
+
 ## [3.9.4] - 2026-08-15
 
 ### Fixed
