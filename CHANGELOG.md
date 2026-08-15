@@ -3,6 +3,18 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.3] - 2026-08-15
+
+### Fixed
+
+- `F2000Alt.solar_power_in` and `F2000Alt.power_in` are now confirmed live, not just
+  cross-referenced: `solar_power_in` jumped from 0 to 105W the moment a solar panel
+  started actively producing power, matching a ~95W reading from the unit's own
+  app/screen at the same moment; `power_in` read exactly `ac_power_in + solar_power_in`
+  (0 + 105 = 105), confirming it's genuinely "AC + solar combined," not a duplicate of
+  `ac_power_in` as previously assumed. Docstrings/docs updated accordingly - no code
+  change, the offsets were already correct as of 3.9.2.
+
 ## [3.9.2] - 2026-08-15
 
 ### Added

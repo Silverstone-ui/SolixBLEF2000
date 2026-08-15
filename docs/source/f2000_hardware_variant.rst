@@ -217,22 +217,26 @@ DC/Car socket port power (W) — port 1   33-34, LE16                     Cross-
                                                                           :attr:`~SolixBLE.F2000Alt.dc1_power`.
 DC/Car socket port power (W) — port 2   35-36, LE16                     Same source/caveat as port 1 above — used by
                                                                           :attr:`~SolixBLE.F2000Alt.dc2_power`.
-Solar input power (W)                   37-38, LE16                     Same source/caveat as the DC port rows above
-                                                                          — used by
+Solar input power (W)                   37-38, LE16                     Cross-referenced from a third-party
+                                                                          independently-built library — used by
                                                                           :attr:`~SolixBLE.F2000Alt.solar_power_in`.
-                                                                          Read 0 in every capture taken so far
-                                                                          (battery pinned at 100%, so the charge
-                                                                          controller had no current to report
-                                                                          regardless of panel output) — genuinely
-                                                                          unconfirmed, not just untested.
+                                                                          **Confirmed live**: read 0 in every capture
+                                                                          with no solar connected, then jumped to
+                                                                          105W the moment a panel was actively
+                                                                          producing power, matching a ~95W reading
+                                                                          from the unit's own app/screen at the same
+                                                                          moment. ``charging_status`` also flipped
+                                                                          DISCHARGING → IDLE at the same time,
+                                                                          consistent with solar roughly covering the
+                                                                          concurrent 84W AC load.
 Total input power (W), all sources      39-40, LE16                     Previously assumed to duplicate offset
 combined                                                                 19-20 (AC input) because they always
-                                                                          matched in testing — the same source above
-                                                                          documents this as a distinct "AC + solar
-                                                                          combined" field. Every test here so far had
-                                                                          solar disconnected, which would make the
-                                                                          two indistinguishable either way — not yet
-                                                                          confirmed with solar actually connected.
+                                                                          matched in testing (solar was always
+                                                                          disconnected). **Confirmed live**: with AC
+                                                                          input at 0 and solar input at 105W, this
+                                                                          field read exactly 105W — genuinely AC +
+                                                                          solar combined, not a duplicate. Used by
+                                                                          :attr:`~SolixBLE.F2000Alt.power_in`.
 External/expansion battery temp (°C)    67                               Cross-referenced from the same third-party
                                                                           source, not yet confirmed — no expansion
                                                                           battery available to test with. Used by
@@ -446,10 +450,11 @@ Known unknowns
   AC + light bar power), 24/26/28/30/32 (USB port power high bytes), 33-36 (DC port
   power), 37-38 (solar input), 39-40 (total input), 67 (external battery temp), and 71
   (external battery %) have all since been identified — see the field map above — and
-  moved out of this list. All of them read ``0`` in every capture taken so far for the
-  same underlying reason: either a high byte that's genuinely 0 below 256W, or a field
-  with nothing to report yet (no solar current flowing at 100% battery, no expansion
-  battery attached) — not evidence the offsets themselves are wrong.
+  moved out of this list. Offsets 37-38 and 39-40 (solar input / total input) are now
+  **confirmed live** — see their rows above. The rest still read ``0`` in every capture
+  taken so far for the same underlying reason: either a high byte that's genuinely 0
+  below 256W, or a field with nothing to report yet (no expansion battery attached) —
+  not evidence the offsets themselves are wrong.
 - What offset 17-18 (LE16) actually represents is unidentified — see the field map above.
   It moves in response to load (startup-inrush-then-settle pattern) but does not match real
   output power in either magnitude or behavior, so it's tracking *something* real, just not

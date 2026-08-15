@@ -409,12 +409,16 @@ class F2000Alt(SolixBLEDevice):
     def solar_power_in(self) -> int:
         """Solar input power (watts).
 
-        .. note::
-            Offset cross-referenced from a third-party independently-built
-            library (the same source that identified the offset 21/41
-            16-bit LE bug - see the note on :attr:`power_out`), not yet
-            confirmed against an actual solar load on this project's own
-            hardware.
+        Offset cross-referenced from a third-party independently-built
+        library (the same source that identified the offset 21/41 16-bit
+        LE bug - see the note on :attr:`power_out`). Confirmed live: read
+        0 in every capture with no solar connected, then jumped to 105W
+        the moment a panel was actively producing power, matching a ~95W
+        reading from the unit's own app/screen at the same moment (small
+        gap, same order of magnitude - the first movement this field
+        showed all session). :attr:`charging_status` also flipped from
+        ``DISCHARGING`` to ``IDLE`` at the same time, consistent with
+        solar (105W) roughly covering the concurrent AC load (84W).
 
         :returns: Solar power in or default int value.
         """
@@ -424,14 +428,13 @@ class F2000Alt(SolixBLEDevice):
     def power_in(self) -> int:
         """Total input power, all sources combined (watts).
 
-        .. note::
-            This project's docs previously assumed this offset duplicated
-            :attr:`ac_power_in` (offset 19-20), because they always matched
-            in testing - a third-party library instead documents this as a
-            genuinely distinct "total input" field (AC + solar combined).
-            Every test run here so far had solar disconnected, which would
-            make the two indistinguishable either way - not yet confirmed
-            with solar actually connected on this project's own hardware.
+        This project's docs previously assumed this offset duplicated
+        :attr:`ac_power_in` (offset 19-20), because they always matched in
+        testing - every test run here so far had solar disconnected, which
+        would make the two indistinguishable. Confirmed distinct live: with
+        :attr:`ac_power_in` at 0 and :attr:`solar_power_in` at 105W, this
+        field read exactly 105W (``0 + 105``) - genuinely AC + solar
+        combined, not a duplicate.
 
         :returns: Total power in or default int value.
         """
