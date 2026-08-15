@@ -3,6 +3,20 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.4] - 2026-08-15
+
+### Fixed
+
+- Documented `F2000Alt.time_remaining` (and `hours_remaining`/`days_remaining`/
+  `timestamp_remaining`, which all depend on it) as confirmed unreliable. Offset
+  57-58 was found completely frozen at the same raw value across 5 very different
+  live conditions in one session (load 67W-287W, battery 100%->99%, solar
+  0W-303W), while the unit's own screen moved a lot (16.4h -> 7h) over the same
+  period - not a divisor problem, the byte itself doesn't move. No code change
+  (still returns `raw / 10.0`, unchanged pending a real fix) - this is a
+  documentation-only release so downstream consumers (HaSolixBLE) know not to
+  trust it.
+
 ## [3.9.3] - 2026-08-15
 
 ### Fixed

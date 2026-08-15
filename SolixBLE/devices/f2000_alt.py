@@ -444,6 +444,21 @@ class F2000Alt(SolixBLEDevice):
     def time_remaining(self) -> float:
         """Time remaining to empty, on battery discharge, in hours.
 
+        .. warning::
+            **Confirmed unreliable for this hardware variant - do not trust
+            this value.** Offset 57-58 was found completely frozen at the
+            same raw value across 5 very different live conditions in one
+            session (load swinging 67W-287W, battery 100%->99%, solar
+            0W-303W), while the unit's own screen moved a lot (16.4h -> 7h)
+            over the same period. Either this offset is stale/cached data
+            never refreshed by this library's poll, or the official app
+            computes its own ETA client-side (from raw energy + current
+            load) rather than reading a transmitted field, and this offset
+            means something else entirely. Not fixed by any divisor change
+            - the underlying byte itself doesn't move. Excluded from
+            HaSolixBLE's sensors for this device type until actually
+            solved - see :doc:`/f2000_hardware_variant`.
+
         .. note::
             This does not reflect "time to full charge" while charging - it
             keeps showing the last discharge estimate. That field has not

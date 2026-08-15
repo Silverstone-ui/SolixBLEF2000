@@ -189,10 +189,30 @@ Total output power (W), offset 17-18    17-18, LE16 (dup. 37-38)         Formerl
                                                                           settle pattern during a DC load test, never
                                                                           cross-checked against the unit's own screen).
                                                                           Its real meaning is unidentified again.
-AC input power while charging (W)       19-20, LE16 (dup. 39-40)         Only nonzero while charging.
-Time remaining — discharge (hours)      57-58, LE16, value ÷ 10          Does **not** update for "time to full charge"
-                                                                          while charging — that field is not yet
-                                                                          located.
+AC input power while charging (W)       19-20, LE16                     Only nonzero while charging. Previously
+                                                                          annotated "dup. 39-40" — confirmed wrong,
+                                                                          see the "Total input power" row above:
+                                                                          39-40 is AC + solar combined, not a
+                                                                          duplicate, they only matched because every
+                                                                          earlier test had solar disconnected.
+Time remaining — discharge (hours)      57-58, LE16                     **Confirmed unreliable — do not trust.**
+                                                                          Found completely frozen at the same raw
+                                                                          value (819) across 5 very different live
+                                                                          conditions in one session (load 67W-287W,
+                                                                          battery 100%->99%, solar 0W-303W), while
+                                                                          the unit's own screen moved a lot
+                                                                          (16.4h -> 7h) over the same period. Not a
+                                                                          divisor problem — the ``value ÷ 10``
+                                                                          convention (removed above) never mattered,
+                                                                          the underlying byte itself doesn't move.
+                                                                          Either stale/cached data this library's
+                                                                          poll never refreshes, or the official app
+                                                                          computes its own ETA client-side instead of
+                                                                          reading a transmitted field. Excluded from
+                                                                          HaSolixBLE's sensors for this device type
+                                                                          until solved. Also does **not** update for
+                                                                          "time to full charge" while charging — that
+                                                                          field is not yet located either.
 AC output on/off                        63                               0/1.
 AC/charging state                       68                               Not a simple mirror of byte 63 — observed
                                                                           values: 0 = idle, 1 = AC output active,
