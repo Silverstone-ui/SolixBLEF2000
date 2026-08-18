@@ -118,8 +118,19 @@ Handshake:
      which contains everything the base frame does plus a 20-byte settings/configuration
      block appended before the final checksum byte.
 
-There is also a small ~14-byte heartbeat/ack frame observed periodically; its contents are
-not decoded and it can be ignored by consumers (filter on payload length >= 100 bytes).
+There is also a small ~14-byte **StateAck** frame - previously assumed to be no-op
+heartbeat noise and ignored/undecoded by consumers (issue #9). It's not noise: it fires
+when a physical button on the unit is pressed (or a command changes output/LED state),
+carrying just the changed fields rather than a full telemetry snapshot. Identified by byte
+6 == ``0x48`` (vs. ``0x49`` for a real telemetry frame's first content byte); offsets 9/10/
+11/12 hold AC output / DC output / power saving / light bar state respectively - the same
+values :attr:`~SolixBLE.F2000Alt.ac_output`/:attr:`~SolixBLE.F2000Alt.dc_output`/
+:attr:`~SolixBLE.F2000Alt.power_saving_mode_enabled`/:attr:`~SolixBLE.F2000Alt.light`
+already expose. Handled by :meth:`~SolixBLE.F2000Alt._handle_state_ack`, which patches
+these bytes into the already-cached frames rather than replacing them outright. Offsets
+cross-referenced from two independent third-party libraries for this device (see issue
+#9) - **not yet confirmed against this project's own hardware**, needs a live test:
+press a physical button while connected and check the raw notification bytes match.
 
 
 .. _f2000_variant_firmware:

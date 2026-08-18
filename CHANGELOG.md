@@ -3,6 +3,21 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.8] - 2026-08-18
+
+### Fixed
+
+- `F2000Alt` no longer silently drops the small ~14-byte `StateAck` notifications this
+  device sends when a physical button is pressed. Previously assumed to be no-op
+  heartbeat noise and discarded unread by the `len(data) < 100` filter - flagged by
+  `impala454` (see #9), cross-confirmed by two independent third-party libraries for this
+  device. Now detected before the length-based discard and patched into the already-cached
+  telemetry frames, so `ac_output`/`dc_output`/`power_saving_mode_enabled`/`light` update
+  immediately from a physical button press instead of waiting for the next poll (and
+  potentially being missed or overwritten in between). **Not yet confirmed against this
+  project's own hardware** - offsets are cross-referenced from two independent sources,
+  same trust level solar was at before it was verified live.
+
 ## [3.9.7] - 2026-08-18
 
 ### Fixed

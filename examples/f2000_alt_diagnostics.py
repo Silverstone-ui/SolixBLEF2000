@@ -123,6 +123,27 @@ async def main() -> None:
                 await asyncio.sleep(2)
                 await device.get_status_update()
                 print_status(device, f"light={mode.name}")
+
+        if await prompt_yes_no(
+            "\nWatch for physical button presses for 30s? (press AC/DC/power-"
+            "saving/light buttons directly on the unit, not through this "
+            "script - tests issue #9's StateAck handling)"
+        ):
+            print(
+                "Watching... press physical buttons on the unit now. Each "
+                "state change should print immediately, with no poll in "
+                "between."
+            )
+
+            def on_state_changed() -> None:
+                print_status(device, "state changed (StateAck or poll)")
+
+            device.add_callback(on_state_changed)
+            try:
+                await asyncio.sleep(30)
+            finally:
+                device.remove_callback(on_state_changed)
+            print("\nDone watching.")
     finally:
         await device.disconnect()
         print("\nDisconnected.")

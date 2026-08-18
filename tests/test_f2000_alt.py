@@ -15,8 +15,12 @@ from unittest import mock
 
 import pytest
 
-from SolixBLE import F2000Alt, LightStatus
-from SolixBLE.devices.f2000_alt import CMD_POLL_TELEMETRY
+from SolixBLE import F2000Alt, LightStatus, PortStatus
+from SolixBLE.devices.f2000_alt import (
+    CMD_POLL_TELEMETRY,
+    _MIN_STATE_ACK_LENGTH,
+    _STATE_ACK_TELEMETRY_ID,
+)
 from tests.const import MOCK_BLE_DEVICE
 from tests.helpers import MockDevice
 
@@ -241,6 +245,83 @@ async def test_power_saving_mode_enabled_reads_offset_117(raw_value: int, expect
         mock_bluetooth.check_assertions()
 
         assert device.power_saving_mode_enabled is expected
+
+
+def _state_ack_frame(
+    ac_outlet_on: int = 1, twelve_volt_on: int = 0, power_save_on: int = 1, led_state: int = 3
+) -> bytes:
+    """Build a synthetic ~14-byte StateAck notification (issue #9).
+
+    Sent by the device when a physical button is pressed (or a command
+    changes output/LED state) - previously discarded unread as assumed
+    heartbeat noise, now patched into the cached telemetry frames by
+    :meth:`F2000Alt._handle_state_ack`. Offsets cross-referenced from two
+    independent third-party libraries for this device, not yet confirmed
+    against this project's own hardware.
+
+    :param ac_outlet_on: Value at offset 9 - AC output on/off.
+    :param twelve_volt_on: Value at offset 10 - DC/car-socket output on/off.
+    :param power_save_on: Value at offset 11 - power saving mode on/off.
+    :param led_state: Value at offset 12 - light bar mode (0-4, matches
+        :class:`LightStatus`'s value convention directly).
+    """
+    frame = bytearray(_MIN_STATE_ACK_LENGTH)
+    frame[6] = _STATE_ACK_TELEMETRY_ID
+    frame[9] = ac_outlet_on
+    frame[10] = twelve_volt_on
+    frame[11] = power_save_on
+    frame[12] = led_state
+    return bytes(frame)
+
+
+@pytest.mark.asyncio
+async def test_state_ack_patches_cached_frames():
+    """StateAck notifications must update state immediately, not get dropped as noise.
+
+    Regression test for issue #9: these small frames were previously
+    assumed to be no-op heartbeat noise and discarded by the
+    len(data) < 100 filter without being read at all. They're not noise -
+    they fire on a physical button press and carry real state. This locks
+    in that a StateAck's AC/DC/power-save/light values reach the same
+    properties the equivalent full telemetry frame would.
+    """
+    async with MockDevice() as mock_bluetooth:
+        device = await _connected_device(mock_bluetooth)
+        mock_bluetooth.expect_ordered(
+            CMD_POLL_TELEMETRY, response=[_extended_frame(power_saving=0)]
+        )
+        await device.get_status_update()
+        mock_bluetooth.check_assertions()
+
+        # Baseline: nothing in the StateAck's "on" state yet.
+        assert device.ac_output == PortStatus.NOT_CONNECTED
+        assert device.power_saving_mode_enabled is False
+
+        await mock_bluetooth.send_data(
+            [
+                _state_ack_frame(
+                    ac_outlet_on=1, twelve_volt_on=0, power_save_on=1, led_state=3
+                )
+            ]
+        )
+
+        assert device.ac_output == PortStatus.OUTPUT
+        assert device.dc_output == PortStatus.NOT_CONNECTED
+        assert device.power_saving_mode_enabled is True
+        assert device.light == LightStatus.HIGH
+
+
+@pytest.mark.asyncio
+async def test_state_ack_before_any_telemetry_is_a_no_op():
+    """A StateAck arriving before any real frame has nothing to patch onto.
+
+    Shouldn't raise or otherwise misbehave - just wait for the first real
+    telemetry frame like everything else does.
+    """
+    device = F2000Alt(MOCK_BLE_DEVICE)
+    device._handle_state_ack(_state_ack_frame())
+    assert device._data is None
+    assert device._extended_data is None
 
 
 @pytest.mark.asyncio

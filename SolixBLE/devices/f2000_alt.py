@@ -46,9 +46,22 @@ _FIELD_POWER_SAVING_MODE = 0x8A
 _FIELD_LIGHT_MODE = 0x8B
 
 #: Minimum notification length to be considered a real telemetry frame,
-#: filtering out the small ~14 byte heartbeat/ack frames this device also
-#: sends periodically.
+#: filtering out the small ~14 byte StateAck frames this device also
+#: sends (see :data:`_STATE_ACK_TELEMETRY_ID` - these used to be assumed
+#: to be no-op heartbeat noise and were discarded unread; they aren't,
+#: see issue #9).
 _MIN_TELEMETRY_LENGTH = 100
+
+#: Byte at offset 6 identifying a StateAck packet - sent whenever a
+#: physical button on the unit is pressed (or a command changes output/
+#: LED state), carrying just the changed state rather than a full
+#: telemetry frame. Cross-referenced from two independent third-party
+#: libraries for this device (see issue #9); not yet confirmed against
+#: this project's own hardware.
+_STATE_ACK_TELEMETRY_ID = 0x48
+
+#: Minimum length to safely read every StateAck field below.
+_MIN_STATE_ACK_LENGTH = 13
 
 #: Minimum length for the *extended* frame (base telemetry + settings block),
 #: only sent in direct response to :data:`CMD_POLL_TELEMETRY`.
@@ -185,12 +198,24 @@ class F2000Alt(SolixBLEDevice):
     def _on_notify(self, sender, data: bytearray) -> None:
         """Handle an incoming telemetry notification.
 
-        Ignores the small heartbeat/ack frames this device also sends. Base
-        telemetry (present in every real frame) updates :attr:`_data`; the
-        settings block (only present in the extended ~122 byte response to
-        a poll) updates :attr:`_extended_data` separately, so a later small
-        passive push doesn't wipe out settings-block properties.
+        Base telemetry (present in every real frame) updates :attr:`_data`;
+        the settings block (only present in the extended ~122 byte response
+        to a poll) updates :attr:`_extended_data` separately, so a later
+        small passive push doesn't wipe out settings-block properties.
+
+        Small (~14 byte) StateAck frames - previously assumed to be no-op
+        heartbeat noise and discarded unread - are handled separately by
+        :meth:`_handle_state_ack` before the length check below, since they
+        carry real state (see issue #9).
         """
+        if (
+            len(data) >= _MIN_STATE_ACK_LENGTH
+            and len(data) < _MIN_TELEMETRY_LENGTH
+            and data[6] == _STATE_ACK_TELEMETRY_ID
+        ):
+            self._handle_state_ack(data)
+            return
+
         if len(data) < _MIN_TELEMETRY_LENGTH:
             return
 
@@ -201,6 +226,50 @@ class F2000Alt(SolixBLEDevice):
             self._extended_data = bytes(data)
 
         self._first_frame_event.set()
+        self._run_state_changed_callbacks()
+
+    def _handle_state_ack(self, data: bytearray) -> None:
+        """Handle a StateAck notification (physical button press or command ack).
+
+        Patches the affected bytes into the already-cached :attr:`_data`/
+        :attr:`_extended_data` frames, at the same offsets the relevant
+        properties already read, rather than replacing the whole frame -
+        a StateAck only carries 4 changed fields, not a full telemetry
+        snapshot. No-ops if a frame hasn't been cached yet (nothing to
+        patch onto until the first real poll response arrives).
+
+        .. note::
+            Cross-referenced from two independent third-party libraries for
+            this device, not yet confirmed against this project's own
+            hardware - see issue #9. The DC/car-socket pair (offset 80/81)
+            is patched from a single StateAck bit, consistent with this
+            project's own finding that they always move together (see
+            :attr:`dc_output`) - if that assumption is ever found wrong
+            (issue #4), this will need to change too.
+        """
+        ac_outlet_on = data[9]
+        twelve_volt_on = data[10]
+        power_save_on = data[11]
+        led_state = data[12]
+
+        if self._data is not None:
+            patched = bytearray(self._data)
+            if len(patched) > 63:
+                patched[63] = ac_outlet_on
+            if len(patched) > 81:
+                patched[80] = twelve_volt_on
+                patched[81] = twelve_volt_on
+            self._data = bytes(patched)
+
+        if self._extended_data is not None:
+            patched_extended = bytearray(self._extended_data)
+            if len(patched_extended) > 117:
+                patched_extended[117] = power_save_on
+            if len(patched_extended) > 118:
+                patched_extended[118] = led_state
+            self._extended_data = bytes(patched_extended)
+
+        self._last_data_timestamp = datetime.now()
         self._run_state_changed_callbacks()
 
     async def get_status_update(self) -> None:
