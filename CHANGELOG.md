@@ -3,6 +3,20 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.7] - 2026-08-18
+
+### Fixed
+
+- `F2000Alt`'s control-command builder (`_send_control`) now computes its length byte
+  dynamically instead of hardcoding a fixed "middle" constant (`0b00`). Only ever looked
+  fixed because every command implemented so far (AC/DC/power-save/light, all single-byte
+  values) happens to produce the same 11-byte frame. Flagged by `impala454` (see #10) -
+  their independently-built library's command definitions show this is a genuine
+  length-of-frame field that varies for commands with larger parameters. No behavior
+  change for existing commands (output is byte-identical, verified by the existing test
+  suite) - this unblocks implementing the timer/recharge-power/screen-brightness commands
+  correctly whenever those get a real HCI capture.
+
 ## [3.9.6] - 2026-08-15
 
 ### Fixed

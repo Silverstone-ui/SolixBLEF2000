@@ -361,8 +361,24 @@ Every control command shares the same shape as :data:`CMD_POLL_TELEMETRY`, writt
 Prefix (6 bytes)        ``08ee000000 02`` (``02`` marks this as a control command,
                          vs. ``01`` for the poll command)
 Field ID (1 byte)       Selects which control is being set — see table below
-Middle (2 bytes)        Fixed ``0b00`` in every command observed
-Value (1 byte)          The value being set
+Length (1 byte)         Total frame length in bytes, including this byte and the
+                         trailing checksum. Always ``0x0b`` (11) for every command
+                         implemented so far, since all four are single-byte on/off/
+                         mode values with a fixed 2-byte parameter section — this
+                         looked like a fixed constant (previously documented as
+                         "Middle (2 bytes): fixed 0b00") until a third-party
+                         independently-built library's command definitions showed
+                         it's a genuine length field, confirmed by checking all 8 of
+                         its command types (11 for on/off/mode, 12 for
+                         recharge-power/screen-timeout, 14 for AC/12V timers - see
+                         issue #10). Not yet an issue for any command actually
+                         implemented here — only matters once a longer command
+                         (timers, recharge power, screen brightness/timeout) is
+                         added, at which point this byte must be computed rather
+                         than hardcoded.
+Parameters (2+ bytes)   A reserved/padding byte (``0x00``) followed by the value
+                         being set. 2 bytes total for every command implemented so
+                         far; longer for commands not yet implemented (see above).
 Checksum (1 byte)       Unweighted sum of all preceding bytes, mod 256 — **not**
                          the XOR checksum used by the encrypted-protocol devices
                          (:meth:`SolixBLEDevice._checksum`)

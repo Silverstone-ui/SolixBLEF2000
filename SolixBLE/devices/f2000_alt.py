@@ -45,9 +45,6 @@ _FIELD_DC_OUTPUT = 0x87
 _FIELD_POWER_SAVING_MODE = 0x8A
 _FIELD_LIGHT_MODE = 0x8B
 
-#: Fixed bytes following the field ID in every control command observed so far.
-_CONTROL_MIDDLE = bytes.fromhex("0b00")
-
 #: Minimum notification length to be considered a real telemetry frame,
 #: filtering out the small ~14 byte heartbeat/ack frames this device also
 #: sends periodically.
@@ -809,24 +806,40 @@ class F2000Alt(SolixBLEDevice):
             return TemperatureUnit.FAHRENHEIT
         return TemperatureUnit.UNKNOWN
 
-    async def _send_control(self, field_id: int, value: int) -> None:
+    async def _send_control(self, field_id: int, parameters: bytes) -> None:
         """Send a control command.
 
         Control commands share a common shape with :data:`CMD_POLL_TELEMETRY`:
         a fixed prefix, a single field-ID byte selecting what is being set, a
-        fixed middle section, a one-byte value, and a trailing checksum byte
-        (the unweighted sum of every preceding byte, mod 256 - not the XOR
+        length byte, the parameter bytes, and a trailing checksum byte (the
+        unweighted sum of every preceding byte, mod 256 - not the XOR
         checksum used by the encrypted-protocol devices).
 
+        .. note::
+            The length byte was previously hardcoded as part of a fixed
+            "middle" constant (``0b00``), since every command implemented so
+            far (simple on/off/mode toggles) happens to produce the same
+            11-byte frame. A third-party independently-built library
+            documents this as a genuine length-of-frame field that varies
+            for commands with larger parameters (timers, recharge power,
+            screen brightness/timeout) - see issue #10. Fixed proactively;
+            computing it dynamically produces byte-identical output for
+            every command implemented so far.
+
         :param field_id: Field ID byte selecting which control to set.
-        :param value: Value byte to set the field to.
+        :param parameters: Parameter bytes for this command (e.g.
+            ``b"\\x00\\x01"`` for a simple on/off toggle - a
+            reserved/padding byte followed by the value). Length varies by
+            command; the frame's length byte is computed from this
+            automatically.
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
         if not self.connected:
             raise ConnectionError(f"Not connected to '{self.name}'!")
 
-        body = _CMD_CONTROL_PREFIX + bytes([field_id]) + _CONTROL_MIDDLE + bytes([value])
+        length = len(_CMD_CONTROL_PREFIX) + 1 + 1 + len(parameters) + 1
+        body = _CMD_CONTROL_PREFIX + bytes([field_id, length]) + parameters
         checksum = sum(body) % 256
         command = body + bytes([checksum])
 
@@ -838,7 +851,7 @@ class F2000Alt(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_control(_FIELD_AC_OUTPUT, 1)
+        await self._send_control(_FIELD_AC_OUTPUT, bytes([0x00, 1]))
 
     async def turn_ac_off(self) -> None:
         """Turn the AC output off.
@@ -846,7 +859,7 @@ class F2000Alt(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_control(_FIELD_AC_OUTPUT, 0)
+        await self._send_control(_FIELD_AC_OUTPUT, bytes([0x00, 0]))
 
     async def turn_dc_on(self) -> None:
         """Turn the DC/Car socket output on.
@@ -854,7 +867,7 @@ class F2000Alt(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_control(_FIELD_DC_OUTPUT, 1)
+        await self._send_control(_FIELD_DC_OUTPUT, bytes([0x00, 1]))
 
     async def turn_dc_off(self) -> None:
         """Turn the DC/Car socket output off.
@@ -862,7 +875,7 @@ class F2000Alt(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_control(_FIELD_DC_OUTPUT, 0)
+        await self._send_control(_FIELD_DC_OUTPUT, bytes([0x00, 0]))
 
     async def turn_power_saving_mode_on(self) -> None:
         """Turn power saving mode on.
@@ -870,7 +883,7 @@ class F2000Alt(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_control(_FIELD_POWER_SAVING_MODE, 1)
+        await self._send_control(_FIELD_POWER_SAVING_MODE, bytes([0x00, 1]))
 
     async def turn_power_saving_mode_off(self) -> None:
         """Turn power saving mode off.
@@ -878,7 +891,7 @@ class F2000Alt(SolixBLEDevice):
         :raises ConnectionError: If not connected to device.
         :raises BleakError: If command transmission fails.
         """
-        await self._send_control(_FIELD_POWER_SAVING_MODE, 0)
+        await self._send_control(_FIELD_POWER_SAVING_MODE, bytes([0x00, 0]))
 
     async def set_light_mode(self, mode: LightStatus) -> None:
         """Set the light bar mode.
@@ -890,4 +903,4 @@ class F2000Alt(SolixBLEDevice):
         """
         if mode is LightStatus.UNKNOWN:
             raise ValueError("You cannot set the light status to unknown")
-        await self._send_control(_FIELD_LIGHT_MODE, mode.value)
+        await self._send_control(_FIELD_LIGHT_MODE, bytes([0x00, mode.value]))

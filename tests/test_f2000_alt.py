@@ -273,6 +273,31 @@ async def test_control_command_bytes(method_name: str, expected_hex: str):
 
 
 @pytest.mark.asyncio
+async def test_send_control_computes_length_for_longer_parameters():
+    """Regression test: the length byte must reflect actual parameter size, not a constant.
+
+    Previously hardcoded as part of a fixed "middle" constant (0b00),
+    since every command implemented so far (AC/DC/power-save/light, all
+    single-byte values) happens to produce the same 11-byte frame. A
+    third-party independently-built library documents this as a genuine
+    length-of-frame field that varies for commands with larger parameters
+    (e.g. timers use a 5-byte parameter section) - see issue #10. This
+    uses a synthetic 5-byte parameter set (matching the shape of a real
+    timer command: a reserved byte, a 2-byte LE value, and 2 padding
+    bytes) against an arbitrary field ID - not a real confirmed command,
+    just proof the length/checksum math generalizes correctly.
+    """
+    async with MockDevice() as mock_bluetooth:
+        device = await _connected_device(mock_bluetooth)
+
+        # length = 6 (prefix) + 1 (field_id) + 1 (length byte) + 5 (parameters) + 1 (checksum) = 14
+        expected_hex = "08ee00000002aa0e0034120000f6"
+        mock_bluetooth.expect_ordered(bytes.fromhex(expected_hex), response=[])
+        await device._send_control(0xAA, bytes([0x00, 0x34, 0x12, 0x00, 0x00]))
+        mock_bluetooth.check_assertions()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "mode,expected_hex",
     [
