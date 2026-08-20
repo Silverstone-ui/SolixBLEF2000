@@ -345,9 +345,10 @@ class F2000Alt(SolixBLEDevice):
         """Expansion/external battery percentage, if one is attached.
 
         .. note::
-            Offset cross-referenced from a third-party independently-built
-            library, not yet confirmed on this project's own hardware (no
-            expansion battery available to test with).
+            Confirmed live: with a real expansion battery attached, read a
+            distinct, plausible value (86%) alongside the main battery at
+            100% - clearly a real, independent reading, not a dead/mirrored
+            byte.
 
         :returns: External battery percentage or default int value.
         """
@@ -358,8 +359,13 @@ class F2000Alt(SolixBLEDevice):
         """Combined battery percentage across main + any expansion battery.
 
         .. note::
-            Offset cross-referenced from a third-party independently-built
-            library, not yet confirmed on this project's own hardware.
+            Confirmed live to be a real, non-zero field with an expansion
+            battery attached - but read exactly 100%, matching the main
+            battery, while the expansion battery was at 86% at the same
+            moment. Not a simple capacity-weighted average of the two, or
+            not yet settled after the expansion was first connected -
+            exact semantics still unclear, worth another look after a
+            partial discharge cycle.
 
         :returns: Total battery percentage or default int value.
         """
@@ -378,9 +384,10 @@ class F2000Alt(SolixBLEDevice):
         """Expansion/external battery temperature (C), if one is attached.
 
         .. note::
-            Offset cross-referenced from a third-party independently-built
-            library, not yet confirmed on this project's own hardware (no
-            expansion battery available to test with).
+            Confirmed live: with a real expansion battery attached, read
+            32C alongside the main battery's 31C at the same moment -
+            close, plausible values for two packs sitting near each other,
+            not a dead/mirrored byte.
 
         :returns: External battery temperature or default int value.
         """

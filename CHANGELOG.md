@@ -3,6 +3,19 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/). This file starts
 from the F2000Alt work below — earlier releases aren't retroactively documented here.
 
+## [3.9.9] - 2026-08-19
+
+### Fixed
+
+- `F2000Alt.external_battery_percentage`, `total_battery_percentage`, and
+  `external_battery_temperature` are now confirmed live against a real expansion battery,
+  not just cross-referenced. `external_battery_percentage` read a distinct, plausible 86%
+  alongside the main battery's 100%; `external_battery_temperature` read 32°C alongside
+  the main battery's 31°C. `total_battery_percentage` is confirmed as a real, non-zero
+  field, but read exactly 100% (matching main) rather than a capacity-weighted blend of
+  100% and 86% - exact semantics still unclear, noted in the docs rather than assumed.
+  No code change - the offsets were already correct.
+
 ## [3.9.8] - 2026-08-18
 
 ### Fixed

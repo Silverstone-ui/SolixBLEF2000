@@ -277,20 +277,29 @@ combined                                                                 19-20 (
                                                                           field read exactly 105W — genuinely AC +
                                                                           solar combined, not a duplicate. Used by
                                                                           :attr:`~SolixBLE.F2000Alt.power_in`.
-External/expansion battery temp (°C)    67                               Cross-referenced from the same third-party
-                                                                          source, not yet confirmed — no expansion
-                                                                          battery available to test with. Used by
+External/expansion battery temp (°C)    67                               **Confirmed live 2026-08-19** — with a real
+                                                                          expansion battery attached, read 32°C
+                                                                          alongside the main battery's 31°C, a
+                                                                          plausible pair of values, not dead/mirrored.
+                                                                          Used by
                                                                           :attr:`~SolixBLE.F2000Alt.external_battery_temperature`.
-External/expansion battery %            71                               Same source/caveat as above — used by
+External/expansion battery %            71                               **Confirmed live 2026-08-19** — read 86%
+                                                                          with a real expansion battery attached
+                                                                          (main battery was at 100% at the same
+                                                                          moment) — a distinct, plausible, genuinely
+                                                                          independent reading. Used by
                                                                           :attr:`~SolixBLE.F2000Alt.external_battery_percentage`.
-                                                                          Read 0 in every capture so far, consistent
-                                                                          with no expansion battery attached.
-Total battery % (main + expansion)      72                               Same source — used by
+Total battery % (main + expansion)      72                               **Confirmed live 2026-08-19** as a real,
+                                                                          non-zero field — but read exactly 100%,
+                                                                          matching the main battery, while the
+                                                                          expansion battery was at 86% at the same
+                                                                          moment. Not a simple capacity-weighted
+                                                                          average of the two, or not yet settled
+                                                                          right after the expansion was connected —
+                                                                          exact semantics still unclear, worth a
+                                                                          re-check after a partial discharge cycle.
+                                                                          Used by
                                                                           :attr:`~SolixBLE.F2000Alt.total_battery_percentage`.
-                                                                          Matched :attr:`battery_percentage` (100) in
-                                                                          every capture so far, consistent with a
-                                                                          single-battery unit, though not a live
-                                                                          confirmation of the offset itself.
 USB-C port power (W) — port A           23-24, LE16                     Read as a single byte (max 255W) until
                                                                           this session cross-referenced the same
                                                                           third-party source and found the high byte
@@ -506,11 +515,11 @@ Known unknowns
   AC + light bar power), 24/26/28/30/32 (USB port power high bytes), 33-36 (DC port
   power), 37-38 (solar input), 39-40 (total input), 67 (external battery temp), and 71
   (external battery %) have all since been identified — see the field map above — and
-  moved out of this list. Offsets 37-38 and 39-40 (solar input / total input) are now
-  **confirmed live** — see their rows above. The rest still read ``0`` in every capture
-  taken so far for the same underlying reason: either a high byte that's genuinely 0
-  below 256W, or a field with nothing to report yet (no expansion battery attached) —
-  not evidence the offsets themselves are wrong.
+  moved out of this list. Offsets 37-38, 39-40, 67, and 71 are now **confirmed live** —
+  see their rows above (67/71 confirmed 2026-08-19 with a real expansion battery
+  attached). The rest of the original list still reads ``0`` in every capture taken so
+  far for the same underlying reason: a high byte that's genuinely 0 below 256W — not
+  evidence the offsets themselves are wrong.
 - What offset 17-18 (LE16, i.e. read as one combined 16-bit value) actually represents is
   still unidentified — see the field map above. It moves in response to load
   (startup-inrush-then-settle pattern) but does not match real output power in either
